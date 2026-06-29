@@ -24,6 +24,7 @@ public sealed class SynchronizationContextHelper(SynchronizationContext synchron
 
     private readonly SynchronizationContext _synchronizationContext = synchronizationContext ?? throw new ArgumentNullException(nameof(synchronizationContext));
     private static readonly ConditionalWeakTable<Type, CheckAccessInvoker> s_checkAccessFactories = new();
+    private static readonly ConditionalWeakTable<Type, Func<SynchronizationContext, bool>> s_checkAccessDelegates = new();
     private static readonly Func<bool> s_falseFunc = () => false;
 
     private Func<bool>? CheckAccessDelegate
@@ -38,17 +39,13 @@ public sealed class SynchronizationContextHelper(SynchronizationContext synchron
 
     public bool CheckAccess()
     {
-        if (!IsThreadAffineKnown) return false;
-
-        if (UseReferenceEquals && ReferenceEquals(SynchronizationContext.Current, _synchronizationContext))
+        if (UseReferenceEquals && IsThreadAffineKnown && ReferenceEquals(SynchronizationContext.Current, _synchronizationContext))
         {
             return true;
         }
 
-        CheckAccessDelegate ??= GetCheckAccessDelegate();
-        var checkAccess = CheckAccessDelegate;
-        Debug.Assert(checkAccess != null);
-        return checkAccess!();
+        var checkAccess = CheckAccessDelegate ??= GetCheckAccessDelegate();
+        return checkAccess();
     }
 
     private Func<bool> GetCheckAccessDelegate()
@@ -59,10 +56,54 @@ public sealed class SynchronizationContextHelper(SynchronizationContext synchron
         }
 
         var type = _synchronizationContext.GetType();
-        var holder = s_checkAccessFactories.GetValue(type, static t => CreateCheckAccessInvoker(t));
-        var factory = holder.GetFactory();
-        var del = factory(_synchronizationContext);
-        return del;
+
+        if (s_checkAccessDelegates.TryGetValue(type, out var checkAccess))
+        {
+            return () => checkAccess(_synchronizationContext);
+        }
+
+        Func<SynchronizationContext, Func<bool>> factory;
+        if (s_checkAccessFactories.TryGetValue(type, out var holder))
+        {
+            factory = holder.GetFactory();
+            return factory(_synchronizationContext);
+        }
+
+        if (!IsThreadAffineKnown)
+        {
+            return s_falseFunc;
+        }
+
+        holder = s_checkAccessFactories.GetValue(type, static t => CreateCheckAccessInvoker(t));
+        factory = holder.GetFactory();
+        return factory(_synchronizationContext);
+    }
+
+    internal static void RegisterCheckAccessDelegate(Type type, Func<SynchronizationContext, bool> checkAccess)
+    {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(checkAccess);
+#else
+        _ = type ?? throw new ArgumentNullException(nameof(type));
+        _ = checkAccess ?? throw new ArgumentNullException(nameof(checkAccess));
+#endif
+        if (!typeof(SynchronizationContext).IsAssignableFrom(type))
+        {
+            throw new ArgumentException($"The type must derive from {typeof(SynchronizationContext).FullName}.", nameof(type));
+        }
+        s_checkAccessDelegates.AddOrUpdate(type, checkAccess);
+        s_checkAccessFactories.Remove(type);
+    }
+
+    internal static bool UnregisterCheckAccessDelegate(Type type)
+    {
+#if NET6_0_OR_GREATER
+        ArgumentNullException.ThrowIfNull(type);
+#else
+        _ = type ?? throw new ArgumentNullException(nameof(type));
+#endif
+        return s_checkAccessDelegates.Remove(type);
     }
 
     private static CheckAccessInvoker CreateCheckAccessInvoker(Type type)
@@ -89,7 +130,9 @@ public sealed class SynchronizationContextHelper(SynchronizationContext synchron
                     {
                         return new CheckAccessInvoker(_ => s_falseFunc);
                     }
-                    var checkAccessMethod = dispatcherField.FieldType.GetMethod("CheckAccess");
+                    var checkAccessMethod = dispatcherField.FieldType.GetMethod("CheckAccess",
+                        BindingFlags.Instance | BindingFlags.Public,
+                        binder: null, types: Type.EmptyTypes, modifiers: null);
                     Debug.Assert(checkAccessMethod != null);
                     if (checkAccessMethod == null)
                     {
@@ -113,11 +156,8 @@ public sealed class SynchronizationContextHelper(SynchronizationContext synchron
                             var nullCheck = Expression.NotEqual(fieldAccess, Expression.Constant(null, dispatcherField.FieldType));
                             var conditional = Expression.Condition(nullCheck, methodCall, Expression.Constant(false));
                             var lambda = Expression.Lambda<Func<SynchronizationContext, bool>>(conditional, ctxParam);
-#if !NETFRAMEWORK || NET471_OR_GREATER
-                            var compiledFunc = lambda.Compile(true);
-#else
                             var compiledFunc = lambda.Compile();
-#endif
+
                             CheckAccessInvoker invoker = null!;
                             invoker = new CheckAccessInvoker(GetCompiledFactory);
                             return invoker;
@@ -247,7 +287,7 @@ public sealed class SynchronizationContextHelper(SynchronizationContext synchron
                                         Trace.WriteLine(msg);
                                         Debug.Fail(msg);
                                     }
-                                    
+
                                     try
                                     {
                                         var newFactory = invoker.Switch(GetReflectiveFactory);

@@ -55,11 +55,6 @@ internal static class DebugInfoStorage
             s_table.Remove(obj);
             return;
         }
-#if NET5_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
         s_table.AddOrUpdate(obj, info);
-#else
-        s_table.Remove(obj);
-        s_table.Add(obj, info);
-#endif
     }
 }
