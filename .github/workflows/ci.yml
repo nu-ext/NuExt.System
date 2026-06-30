@@ -38,18 +38,3 @@ jobs:
 
       - name: Test (Release)
         run: dotnet test --configuration Release --nologo --no-build
-
-      - name: pack (nupkg + snupkg, prerelease)
-        run: dotnet pack src/NuExt.System.csproj -c Release -o artifacts --nologo /p:IncludeSymbols=true /p:SymbolPackageFormat=snupkg -p:VersionSuffix="pre.${{ github.run_number }}"
-
-      - name: upload nupkg
-        uses: actions/upload-artifact@v7
-        with:
-          name: nuext-system-nupkg
-          path: artifacts/*.nupkg
-
-      - name: upload snupkg
-        uses: actions/upload-artifact@v7
-        with:
-          name: nuext-system-snupkg
-          path: artifacts/*.snupkg
