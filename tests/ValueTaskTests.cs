@@ -69,7 +69,7 @@ public class ValueTaskTests
     }
 
     [Test]
-    public void WhenAll_TaskFails_ThrowsAggregateException()
+    public async Task WhenAll_TaskFails_ThrowsAggregateException()
     {
         var tasks = new List<ValueTask<int>>
         {
@@ -78,7 +78,7 @@ public class ValueTaskTests
             new(Task.FromResult(3))
         };
 
-        var ex = Assert.ThrowsAsync<AggregateException>(async () => await tasks.WhenAll());
+        var ex = await Assert.ThrowsAsync<AggregateException>(async () => await tasks.WhenAll());
         Assert.That(ex?.InnerExceptions.Count, Is.EqualTo(1));
         Assert.That(ex?.InnerException, Is.TypeOf<InvalidOperationException>());
     }
@@ -119,17 +119,17 @@ public class ValueTaskTests
     public async Task WhenAll_EnumerableTasks_AllSucceed()
     {
         var tasks = new List<ValueTask>
-    {
-        ValueTask.CompletedTask,
-        ValueTask.CompletedTask,
-        ValueTask.CompletedTask
-    };
+        {
+            ValueTask.CompletedTask,
+            ValueTask.CompletedTask,
+            ValueTask.CompletedTask
+        };
 
-        Assert.DoesNotThrowAsync(async () => await tasks.WhenAll());
+        await Assert.DoesNotThrowAsync(async () => await tasks.WhenAll());
     }
 
     [Test]
-    public void WhenAll_EnumerableTasks_SomeFail()
+    public async Task WhenAll_EnumerableTasks_SomeFail()
     {
         var tasks = new List<ValueTask>
     {
@@ -138,7 +138,7 @@ public class ValueTaskTests
         new(Task.FromException(new ArgumentNullException()))
     };
 
-        var exception = Assert.ThrowsAsync<AggregateException>(async () => await tasks.WhenAll());
+        var exception = await Assert.ThrowsAsync<AggregateException>(async () => await tasks.WhenAll());
         Assert.That(exception.InnerExceptions, Has.Exactly(2).Items);
         Assert.That(exception.InnerExceptions, Has.Some.InstanceOf<InvalidOperationException>());
         Assert.That(exception.InnerExceptions, Has.Some.InstanceOf<ArgumentNullException>());
@@ -149,7 +149,7 @@ public class ValueTaskTests
     {
         var tasks = Enumerable.Empty<ValueTask>();
 
-        Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks));
+        await Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks));
     }
 
     [Test]
@@ -157,25 +157,25 @@ public class ValueTaskTests
     {
         var tasks = new[]
         {
-        ValueTask.CompletedTask,
-        ValueTask.CompletedTask,
-        ValueTask.CompletedTask
-    };
+            ValueTask.CompletedTask,
+            ValueTask.CompletedTask,
+            ValueTask.CompletedTask
+        };
 
-        Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks));
+        await Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks));
     }
 
     [Test]
-    public void WhenAll_ParamsTasks_SomeFail()
+    public async Task WhenAll_ParamsTasks_SomeFail()
     {
         var tasks = new[]
         {
-        ValueTask.CompletedTask,
-        new ValueTask(Task.FromException(new InvalidOperationException())),
-        new ValueTask(Task.FromException(new ArgumentNullException()))
-    };
+            ValueTask.CompletedTask,
+            new ValueTask(Task.FromException(new InvalidOperationException())),
+            new ValueTask(Task.FromException(new ArgumentNullException()))
+        };
 
-        var exception = Assert.ThrowsAsync<AggregateException>(async () => await ValueTask.WhenAll(tasks));
+        var exception = await Assert.ThrowsAsync<AggregateException>(async () => await ValueTask.WhenAll(tasks));
         Assert.That(exception.InnerExceptions, Has.Exactly(2).Items);
         Assert.That(exception.InnerExceptions, Has.Some.InstanceOf<InvalidOperationException>());
         Assert.That(exception.InnerExceptions, Has.Some.InstanceOf<ArgumentNullException>());
@@ -186,7 +186,7 @@ public class ValueTaskTests
     {
         var tasks = Array.Empty<ValueTask>();
 
-        Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks));
+        await Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks));
     }
 
     [Test]
@@ -194,25 +194,25 @@ public class ValueTaskTests
     {
         var tasks = new[]
         {
-        ValueTask.CompletedTask,
-        ValueTask.CompletedTask,
-        ValueTask.CompletedTask
-    };
+            ValueTask.CompletedTask,
+            ValueTask.CompletedTask,
+            ValueTask.CompletedTask
+        };
 
-        Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks.AsSpan()));
+        await Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks.AsSpan()));
     }
 
     [Test]
-    public void WhenAll_ReadOnlySpanTasks_SomeFail()
+    public async Task WhenAll_ReadOnlySpanTasks_SomeFail()
     {
         var tasks = new[]
         {
-        ValueTask.CompletedTask,
-        new ValueTask(Task.FromException(new InvalidOperationException())),
-        new ValueTask(Task.FromException(new ArgumentNullException()))
-    };
+            ValueTask.CompletedTask,
+            new ValueTask(Task.FromException(new InvalidOperationException())),
+            new ValueTask(Task.FromException(new ArgumentNullException()))
+        };
 
-        var exception = Assert.ThrowsAsync<AggregateException>(async () => await ValueTask.WhenAll(tasks.AsSpan()));
+        var exception = await Assert.ThrowsAsync<AggregateException>(async () => await ValueTask.WhenAll(tasks.AsSpan()));
         Assert.That(exception.InnerExceptions, Has.Exactly(2).Items);
         Assert.That(exception.InnerExceptions, Has.Some.InstanceOf<InvalidOperationException>());
         Assert.That(exception.InnerExceptions, Has.Some.InstanceOf<ArgumentNullException>());
@@ -223,6 +223,6 @@ public class ValueTaskTests
     {
         var tasks = Array.Empty<ValueTask>();
 
-        Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks.AsSpan()));
+        await Assert.DoesNotThrowAsync(async () => await ValueTask.WhenAll(tasks.AsSpan()));
     }
 }

@@ -151,6 +151,7 @@ public static class SynchronizationContextExtensions
         /// <summary>
         /// Executes the specified delegate synchronously using the <see cref="SynchronizationContext"/>.
         /// </summary>
+        /// <typeparam name="TResult">The result type.</typeparam>
         /// <param name="callback">The <see cref="Func{TResult}"/> delegate to call.</param>
         /// <returns>The return value from the delegate being invoked.</returns>
         /// <exception cref="ArgumentNullException">Thrown when the <paramref name="callback"/> parameter is <see langword="null"/>.</exception>
@@ -236,6 +237,7 @@ public static class SynchronizationContextExtensions
         /// <summary>
         /// Posts an asynchronous message to the synchronization context and returns a task that represents the operation.
         /// </summary>
+        /// <typeparam name="TResult">The result type.</typeparam>
         /// <param name="callback">The <see cref="Func{TResult}"/> delegate to call.</param>
         /// <returns>A <see cref="Task{TResult}"/> that represents the asynchronous operation.</returns>
         /// <exception cref="ArgumentNullException">Thrown when the <paramref name="callback"/> parameter is <see langword="null"/>.</exception>
@@ -300,6 +302,7 @@ public static class SynchronizationContextExtensions
         /// <summary>
         /// Posts an asynchronous message to the synchronization context and returns a task that represents the operation.
         /// </summary>
+        /// <typeparam name="TResult">The result type.</typeparam>
         /// <param name="callback">The Func&lt;Task&lt;TResult&gt;&gt; delegate to call.</param>
         /// <returns>A <see cref="Task{TResult}"/> that represents the asynchronous operation.</returns>
         /// <exception cref="ArgumentNullException">Thrown when the <paramref name="callback"/> parameter is <see langword="null"/>.</exception>

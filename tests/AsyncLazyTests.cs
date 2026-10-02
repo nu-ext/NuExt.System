@@ -179,7 +179,7 @@ internal class AsyncLazyTests
         var lazy = new AsyncLazy<int>(() => Task.FromException<int>(exception));
 
         // Act & Assert
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await lazy);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await lazy);
 
         // Wait a moment for task completion
         await Task.Delay(10);
@@ -364,7 +364,7 @@ internal class AsyncLazyTests
     }
 
     [Test]
-    public void AsyncLazy_WithCancellation_HandlesCancellation()
+    public async Task AsyncLazy_WithCancellation_HandlesCancellation()
     {
         // Arrange
         using var cts = new CancellationTokenSource();
@@ -377,7 +377,7 @@ internal class AsyncLazyTests
         });
 
         // Act & Assert
-        Assert.ThrowsAsync<TaskCanceledException>(async () => await lazy);
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await lazy);
     }
 
     [Test]
@@ -471,22 +471,20 @@ internal class AsyncLazyTests
     }
 
     [Test]
-    public Task AsyncLazy_WithExceptionInFactory_PropagatesExceptionOnEveryAccess()
+    public async Task AsyncLazy_WithExceptionInFactory_PropagatesExceptionOnEveryAccess()
     {
         // Arrange
         var exception = new InvalidOperationException("Factory failed");
         var lazy = new AsyncLazy<int>(() => throw exception);
 
         // Act & Assert - First access
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await lazy);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await lazy);
 
         // Second access should throw the same exception
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await lazy);
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await lazy);
 
         // Third access via Task property
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await lazy.Task);
-
-        return Task.CompletedTask;
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await lazy.Task);
     }
 
     #endregion
