@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel;
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
@@ -276,6 +275,89 @@ public sealed partial class ReentrantAsyncLock : Disposable
     }
 
     /// <summary>
+    /// Acquires an exclusive lock for the current context, executes the provided action with the specified state,
+    /// and then releases the lock. This method ensures that the specified action is executed
+    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// </summary>
+    /// <typeparam name="TState">
+    /// The type of the state passed to the action.
+    /// </typeparam>
+    /// <param name="action">
+    /// The action to be executed while holding the lock. Must not be null.
+    /// </param>
+    /// <param name="state">
+    /// The state to pass to the action.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// A <see cref="CancellationToken"/> to observe while waiting to acquire the lock.
+    /// The default value is <see cref="CancellationToken.None"/>.
+    /// </param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown if the provided <paramref name="action"/> is null.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// Thrown if the operation is canceled via the provided <paramref name="cancellationToken"/>.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">
+    /// Thrown if the object has been disposed.
+    /// </exception>
+    /// <exception cref="SynchronizationLockException">
+    /// Thrown if there is an inconsistency in the synchronization state.
+    /// </exception>
+    /// <remarks>
+    /// The method ensures thread-safe execution of the provided action by acquiring either an exclusive
+    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
+    /// </remarks>
+    public void Acquire<TState>(Action<TState> action, TState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        CheckDisposed();
+        bool isReentrant = LocalId == CurrentId;
+        SemaphoreSlim? previousSyncRoot = null;
+        if (isReentrant)//Reentrant lock in the flow
+        {
+            ValidateReentrantState();
+            previousSyncRoot = SyncRoot;
+            if (previousSyncRoot == null)
+            {
+                ThrowSynchronizationLockException();
+            }
+            previousSyncRoot!.Wait(cancellationToken);//Acquires a nested lock in the flow
+        }
+        else
+        {
+            _syncLock.Wait(cancellationToken);//Acquires an exclusive lock in the flow
+            ValidateExclusiveState();
+            _currentId = LocalId;//The lock is obtained
+        }
+        Interlocked.Increment(ref _currentCount);
+        using SemaphoreSlim localSyncRoot = new(1, 1);
+        SyncRoot = localSyncRoot;//Sets synchronization root for a nested lock
+        try
+        {
+            action(state);
+        }
+        finally
+        {
+            PerformValidationAfterExecution(isReentrant, localSyncRoot);
+            SyncRoot = previousSyncRoot;// Restore the previous synchronization root to maintain correct synchronization state and nested lock handling in the current flow.
+            CheckSynchronizationLock();
+            if (Interlocked.Decrement(ref _currentCount) == 0)
+            {
+                ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);
+                _currentId = 0;//The lock is released
+                _syncLock.Release();//Releases an exclusive lock
+            }
+            else
+            {
+                ValidateReentrantStateFinally(isReentrant, previousSyncRoot);
+                previousSyncRoot!.Release();//Releases a nested lock
+            }
+        }
+    }
+
+    /// <summary>
     /// Acquires an exclusive lock for the current context, executes the provided function,
     /// and then releases the lock. This method ensures that the specified function is executed
     /// within a mutually exclusive section, supporting reentrance within the same code flow.
@@ -354,6 +436,95 @@ public sealed partial class ReentrantAsyncLock : Disposable
 
             CheckSynchronizationLock();
 
+            if (Interlocked.Decrement(ref _currentCount) == 0)
+            {
+                ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);
+                _currentId = 0;//The lock is released
+                _syncLock.Release();//Releases an exclusive lock
+            }
+            else
+            {
+                ValidateReentrantStateFinally(isReentrant, previousSyncRoot);
+                previousSyncRoot!.Release();//Releases a nested lock
+            }
+        }
+    }
+
+    /// <summary>
+    /// Acquires an exclusive lock for the current context, executes the provided function with the specified state,
+    /// and then releases the lock. This method ensures that the specified function is executed
+    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// </summary>
+    /// <typeparam name="TState">
+    /// The type of the state passed to the function.
+    /// </typeparam>
+    /// <typeparam name="TResult">
+    /// The type of the result produced by the function.
+    /// </typeparam>
+    /// <param name="func">
+    /// The function to be executed while holding the lock. Must not be null.
+    /// </param>
+    /// <param name="state">
+    /// The state to pass to the function.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// A <see cref="CancellationToken"/> to observe while waiting to acquire the lock.
+    /// The default value is <see cref="CancellationToken.None"/>.
+    /// </param>
+    /// <returns>
+    /// The result of the execution of the provided function.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown if the provided <paramref name="func"/> is null.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// Thrown if the operation is canceled via the provided <paramref name="cancellationToken"/>.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">
+    /// Thrown if the object has been disposed.
+    /// </exception>
+    /// <exception cref="SynchronizationLockException">
+    /// Thrown if there is an inconsistency in the synchronization state.
+    /// </exception>
+    /// <remarks>
+    /// The method ensures thread-safe execution of the provided function by acquiring either an exclusive
+    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
+    /// </remarks>
+    public TResult Acquire<TState, TResult>(Func<TState, TResult> func, TState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(func);
+        CheckDisposed();
+        bool isReentrant = LocalId == CurrentId;
+        SemaphoreSlim? previousSyncRoot = null;
+        if (isReentrant)//Reentrant lock in the flow
+        {
+            ValidateReentrantState();
+            previousSyncRoot = SyncRoot;
+            if (previousSyncRoot == null)
+            {
+                ThrowSynchronizationLockException();
+            }
+            previousSyncRoot!.Wait(cancellationToken);//Acquires a nested lock in the flow
+        }
+        else
+        {
+            _syncLock.Wait(cancellationToken);//Acquires an exclusive lock in the flow
+            ValidateExclusiveState();
+            _currentId = LocalId;//The lock is obtained
+        }
+        Interlocked.Increment(ref _currentCount);
+        using SemaphoreSlim localSyncRoot = new(1, 1);
+        SyncRoot = localSyncRoot;//Sets synchronization root for a nested lock
+        try
+        {
+            return func(state);
+        }
+        finally
+        {
+            PerformValidationAfterExecution(isReentrant, localSyncRoot);
+            SyncRoot = previousSyncRoot;// Restore the previous synchronization root to maintain correct synchronization state and nested lock handling in the current flow.
+            CheckSynchronizationLock();
             if (Interlocked.Decrement(ref _currentCount) == 0)
             {
                 ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);
@@ -460,6 +631,92 @@ public sealed partial class ReentrantAsyncLock : Disposable
 
     /// <summary>
     /// Asynchronously acquires an exclusive lock for the current context, executes the provided asynchronous function
+    /// with the specified state, and then releases the lock. This method ensures that the specified function is executed
+    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// </summary>
+    /// <typeparam name="TState">
+    /// The type of the state passed to the function.
+    /// </typeparam>
+    /// <param name="func">
+    /// The asynchronous function to be executed while holding the lock. Must not be null.
+    /// </param>
+    /// <param name="state">
+    /// The state to pass to the function.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// A <see cref="CancellationToken"/> to observe while waiting to acquire the lock.
+    /// The default value is <see cref="CancellationToken.None"/>.
+    /// </param>
+    /// <returns>
+    /// A <see cref="ValueTask"/> representing the asynchronous operation.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown if the provided <paramref name="func"/> is null.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// Thrown if the operation is canceled via the provided <paramref name="cancellationToken"/>.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">
+    /// Thrown if the object has been disposed.
+    /// </exception>
+    /// <exception cref="SynchronizationLockException">
+    /// Thrown if there is an inconsistency in the synchronization state.
+    /// </exception>
+    /// <remarks>
+    /// The method ensures thread-safe execution of the provided function by acquiring either an exclusive
+    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
+    /// </remarks>
+    public async ValueTask AcquireAsync<TState>(Func<TState, ValueTask> func, TState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(func);
+        CheckDisposed();
+        bool isReentrant = LocalId == CurrentId;
+        SemaphoreSlim? previousSyncRoot = null;
+        if (isReentrant)//Reentrant lock in the flow
+        {
+            ValidateReentrantState();
+            previousSyncRoot = SyncRoot;
+            if (previousSyncRoot == null)
+            {
+                ThrowSynchronizationLockException();
+            }
+            await previousSyncRoot!.WaitAsync(cancellationToken).ConfigureAwait(false);//Acquires a nested lock in the flow
+        }
+        else
+        {
+            await _syncLock.WaitAsync(cancellationToken).ConfigureAwait(false);//Acquires an exclusive lock in the flow
+            ValidateExclusiveState();
+            _currentId = LocalId;//The lock is obtained
+        }
+        Interlocked.Increment(ref _currentCount);
+        using SemaphoreSlim localSyncRoot = new(1, 1);
+        SyncRoot = localSyncRoot;//Sets synchronization root for a nested lock
+        try
+        {
+            await func(state).ConfigureAwait(false);
+        }
+        finally
+        {
+            PerformValidationAfterExecution(isReentrant, localSyncRoot);
+            SyncRoot = null;//Clear the synchronization root to allow garbage collection
+            CheckSynchronizationLock();
+            if (Interlocked.Decrement(ref _currentCount) == 0)
+            {
+                ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);
+                _currentId = 0;//The lock is released
+                _syncLock.Release();//Releases an exclusive lock
+            }
+            else
+            {
+                ValidateReentrantStateFinally(isReentrant, previousSyncRoot);
+                previousSyncRoot!.Release();//Releases a nested lock
+            }
+        }
+    }
+
+    /// <summary>
+    /// Asynchronously acquires an exclusive lock for the current context, executes the provided asynchronous function
     /// that returns a result, and then releases the lock. This method ensures that the specified function is executed
     /// within a mutually exclusive section, supporting reentrance within the same code flow.
     /// </summary>
@@ -537,6 +794,95 @@ public sealed partial class ReentrantAsyncLock : Disposable
 
             CheckSynchronizationLock();
 
+            if (Interlocked.Decrement(ref _currentCount) == 0)
+            {
+                ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);
+                _currentId = 0;//The lock is released
+                _syncLock.Release();//Releases an exclusive lock
+            }
+            else
+            {
+                ValidateReentrantStateFinally(isReentrant, previousSyncRoot);
+                previousSyncRoot!.Release();//Releases a nested lock
+            }
+        }
+    }
+
+    /// <summary>
+    /// Asynchronously acquires an exclusive lock for the current context, executes the provided asynchronous function
+    /// with the specified state and returns its result, and then releases the lock. This method ensures that the specified
+    /// function is executed within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// </summary>
+    /// <typeparam name="TState">
+    /// The type of the state passed to the function.
+    /// </typeparam>
+    /// <typeparam name="TResult">
+    /// The type of the result produced by the function.
+    /// </typeparam>
+    /// <param name="func">
+    /// The asynchronous function to be executed while holding the lock. Must not be null.
+    /// </param>
+    /// <param name="state">
+    /// The state to pass to the function.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// A <see cref="CancellationToken"/> to observe while waiting to acquire the lock.
+    /// The default value is <see cref="CancellationToken.None"/>.
+    /// </param>
+    /// <returns>
+    /// A <see cref="ValueTask{TResult}"/> representing the result of the asynchronous operation.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown if the provided <paramref name="func"/> is null.
+    /// </exception>
+    /// <exception cref="OperationCanceledException">
+    /// Thrown if the operation is canceled via the provided <paramref name="cancellationToken"/>.
+    /// </exception>
+    /// <exception cref="ObjectDisposedException">
+    /// Thrown if the object has been disposed.
+    /// </exception>
+    /// <exception cref="SynchronizationLockException">
+    /// Thrown if there is an inconsistency in the synchronization state.
+    /// </exception>
+    /// <remarks>
+    /// The method ensures thread-safe execution of the provided function by acquiring either an exclusive
+    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
+    /// </remarks>
+    public async ValueTask<TResult> AcquireAsync<TState, TResult>(Func<TState, ValueTask<TResult>> func, TState state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(func);
+        CheckDisposed();
+        bool isReentrant = LocalId == CurrentId;
+        SemaphoreSlim? previousSyncRoot = null;
+        if (isReentrant)//Reentrant lock in the flow
+        {
+            ValidateReentrantState();
+            previousSyncRoot = SyncRoot;
+            if (previousSyncRoot == null)
+            {
+                ThrowSynchronizationLockException();
+            }
+            await previousSyncRoot!.WaitAsync(cancellationToken).ConfigureAwait(false);//Acquires a nested lock in the flow
+        }
+        else
+        {
+            await _syncLock.WaitAsync(cancellationToken).ConfigureAwait(false);//Acquires an exclusive lock in the flow
+            ValidateExclusiveState();
+            _currentId = LocalId;//The lock is obtained
+        }
+        Interlocked.Increment(ref _currentCount);
+        using SemaphoreSlim localSyncRoot = new(1, 1);
+        SyncRoot = localSyncRoot;//Sets synchronization root for a nested lock
+        try
+        {
+            return await func(state).ConfigureAwait(false);
+        }
+        finally
+        {
+            PerformValidationAfterExecution(isReentrant, localSyncRoot);
+            SyncRoot = null;//Clear the synchronization root to allow garbage collection
+            CheckSynchronizationLock();
             if (Interlocked.Decrement(ref _currentCount) == 0)
             {
                 ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);

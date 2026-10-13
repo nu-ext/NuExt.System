@@ -3,6 +3,7 @@
 `NuExt.System` is a **lightweight, production-ready foundation** for everyday .NET development. It brings together high-quality utilities for **asynchrony**, **lifetime management**, **threading primitives**, **high‑performance spans/memory helpers**, **diagnostics**, and **collection helpers** — all with a strong focus on **performance**, **correctness**, and **developer ergonomics**. Use it to reduce boilerplate, standardize common patterns across projects, and keep code fast and clean across modern .NET and .NET Framework.
 
 [![NuGet](https://img.shields.io/nuget/v/NuExt.System.svg)](https://www.nuget.org/packages/NuExt.System)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/nu-ext/NuExt.System)
 [![Build](https://github.com/nu-ext/NuExt.System/actions/workflows/ci.yml/badge.svg)](https://github.com/nu-ext/NuExt.System/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/nu-ext/NuExt.System?label=license)](https://github.com/nu-ext/NuExt.System/blob/main/LICENSE)
 [![Downloads](https://img.shields.io/nuget/dt/NuExt.System.svg)](https://www.nuget.org/packages/NuExt.System)
@@ -74,7 +75,7 @@ This package includes **polyfills (API backports)** for selected `Span` / `Memor
   - `System.Diagnostics.ProcessMonitor`, `PerformanceMonitor`
   - `System.EnumHelper<T>`, `System.FormatUtils`, `System.HexConverter`
 
-## Quick examples
+## Quick Examples
 
 ### 1) Reentrant async lock (with ExecutionContext best practices)
 ```csharp
