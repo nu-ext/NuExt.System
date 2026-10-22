@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-    <Description>High‑performance foundational utilities for .NET, providing async/threading primitives, lifetime management tools, Span/Memory polyfills, fast path builders, diagnostics helpers, and essential collection utilities. Designed for correctness, speed, and consistent behavior across modern .NET and .NET Framework.</Description>
+    <Description>High-performance, cross-platform infrastructure for .NET desktop and hybrid application frameworks, including threading, lifetime, observable state, path processing, and compatibility primitives.</Description>
     <RootNamespace />
     <GenerateDocumentationFile>True</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591;NETSDK1233</NoWarn>

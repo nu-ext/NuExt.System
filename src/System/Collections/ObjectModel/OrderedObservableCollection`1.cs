@@ -10,6 +10,11 @@ namespace System.Collections.ObjectModel;
 /// where each object implements the <see cref="IOrdered"/> interface.
 /// </summary>
 /// <typeparam name="T">The type of elements in the collection, which must implement <see cref="IOrdered"/>.</typeparam>
+/// <remarks>
+/// The collection maintains item order after each mutation. During a synchronous
+/// <see cref="System.Collections.Specialized.INotifyCollectionChanged.CollectionChanged"/> notification, affected
+/// item order values may still reflect their state before the mutation.
+/// </remarks>
 public class OrderedObservableCollection<T> : ObservableCollection<T> where T : IOrdered
 {
     /// <summary>
@@ -55,6 +60,14 @@ public class OrderedObservableCollection<T> : ObservableCollection<T> where T : 
         bool hasRight = rightIndex < Count;
 
         InsertOrMoveItem(item, index, leftIndex, rightIndex, hasLeft, hasRight);
+    }
+    
+    /// <inheritdoc/>
+    protected override void SetItem(int index, T item)
+    {
+        CheckReentrancy();
+        item.Order = this[index].Order;
+        base.SetItem(index, item);
     }
 
     /// <inheritdoc/>

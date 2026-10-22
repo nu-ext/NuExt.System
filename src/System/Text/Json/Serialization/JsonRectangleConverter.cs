@@ -24,45 +24,43 @@ public sealed class JsonRectangleConverter : JsonConverter<Rectangle>
         {
             throw new JsonException();
         }
-        bool readProperty = false;
-        string? propertyName = null;
+
         int x = 0, y = 0, w = 0, h = 0;
         while (reader.Read())
         {
-            switch (reader.TokenType)
+            if (reader.TokenType == JsonTokenType.EndObject)
             {
-                case JsonTokenType.PropertyName:
-                    Debug.Assert(readProperty == false);
-                    readProperty = true;
-                    propertyName = reader.GetString();
-                    continue;
-                case JsonTokenType.Number:
-                    Debug.Assert(readProperty);
-                    switch (propertyName)
-                    {
-                        case nameof(Rectangle.X):
-                            x = reader.GetInt32();
-                            break;
-                        case nameof(Rectangle.Y):
-                            y = reader.GetInt32();
-                            break; 
-                        case nameof(Rectangle.Width):
-                            w = reader.GetInt32();
-                            break;
-                        case nameof(Rectangle.Height):
-                            h = reader.GetInt32();
-                            break;
-                        default:
-                            Debug.Fail($"Unknown {nameof(propertyName)}: {propertyName}");
-                            break;
-                    }
-                    readProperty = false;
+                return new Rectangle(x, y, w, h);
+            }
+
+            if (reader.TokenType != JsonTokenType.PropertyName)
+            {
+                throw new JsonException();
+            }
+
+            string? propertyName = reader.GetString();
+            if (!reader.Read())
+            {
+                throw new JsonException();
+            }
+
+            switch (propertyName)
+            {
+                case nameof(Rectangle.X):
+                    x = reader.GetInt32();
                     break;
-                case JsonTokenType.EndObject:
-                    return new Rectangle(x, y, w, h);
+                case nameof(Rectangle.Y):
+                    y = reader.GetInt32();
+                    break;
+                case nameof(Rectangle.Width):
+                    w = reader.GetInt32();
+                    break;
+                case nameof(Rectangle.Height):
+                    h = reader.GetInt32();
+                    break;
                 default:
-                    Debug.Fail($"Unknown {nameof(reader.TokenType)}: {reader.TokenType}");
-                    continue;
+                    reader.Skip();
+                    break;
             }
         }
         throw new JsonException();

@@ -3,6 +3,7 @@
 internal static class SR
 {
     public const string Arg_BasePathNotFullyQualified = "Basepath argument is not fully qualified.";
+    public const string Arg_PathNotFullyQualified = "Path argument is not fully qualified.";
     public const string Arg_PathEmpty = "The path is empty.";
     public const string Arg_WrongType = """The value "{0}" is not of type "{1}" and cannot be used in this generic collection.""";
 

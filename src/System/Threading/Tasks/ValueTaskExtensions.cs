@@ -23,12 +23,18 @@ public static class ValueTaskExtensions
         /// <summary>Creates a <see cref="ValueTask"/> that has completed due to cancellation with the specified cancellation token.</summary>
         /// <param name="cancellationToken">The cancellation token with which to complete the task.</param>
         /// <returns>The canceled task.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="cancellationToken"/> has not been canceled.
+        /// </exception>
         public static ValueTask FromCanceled(CancellationToken cancellationToken) =>
             new(Task.FromCanceled(cancellationToken));
 
         /// <summary>Creates a <see cref="ValueTask{TResult}"/> that has completed due to cancellation with the specified cancellation token.</summary>
         /// <param name="cancellationToken">The cancellation token with which to complete the task.</param>
         /// <returns>The canceled task.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="cancellationToken"/> has not been canceled.
+        /// </exception>
         public static ValueTask<TResult> FromCanceled<TResult>(CancellationToken cancellationToken) =>
             new(Task.FromCanceled<TResult>(cancellationToken));
 
@@ -46,12 +52,17 @@ public static class ValueTaskExtensions
 #endif
 
         /// <summary>
-        /// Executes a collection of ValueTasks concurrently and returns a task that completes when all the tasks have completed.
+        /// Asynchronously waits for all supplied <see cref="ValueTask"/> instances to complete.
         /// </summary>
-        /// <param name="tasks">An enumerable collection of ValueTasks to be executed.</param>
-        /// <returns>A ValueTask that represents the completion of all provided tasks. If any of the tasks fail, an AggregateException is thrown.</returns>
-        /// <exception cref="ArgumentNullException">The <paramref name="tasks"/> argument was null.</exception>
-        /// <exception cref="AggregateException">One or more exceptions occurred during the invocation of tasks.</exception>
+        /// <param name="tasks">The tasks to wait for.</param>
+        /// <returns>A task that represents the completion of all supplied tasks.</returns>
+        /// <remarks>
+        /// All supplied tasks are observed. If one or more tasks fail or are canceled, the returned task
+        /// throws an <see cref="AggregateException"/> containing all exceptions, including
+        /// <see cref="OperationCanceledException"/> instances.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="tasks"/> is <see langword="null"/>.</exception>
+        /// <exception cref="AggregateException">One or more tasks failed or were canceled.</exception>
         public static ValueTask WhenAll(IEnumerable<ValueTask> tasks)
         {
             ArgumentNullException.ThrowIfNull(tasks);
@@ -85,12 +96,17 @@ public static class ValueTaskExtensions
         }
 
         /// <summary>
-        /// Executes a variable number of ValueTasks concurrently and returns a task that completes when all the tasks have completed.
+        /// Asynchronously waits for all supplied <see cref="ValueTask"/> instances to complete.
         /// </summary>
-        /// <param name="tasks">A variable number of ValueTasks to be executed.</param>
-        /// <returns>A ValueTask that represents the completion of all provided tasks. If any of the tasks fail, an AggregateException is thrown.</returns>
-        /// <exception cref="ArgumentNullException">The <paramref name="tasks"/> argument was null.</exception>
-        /// <exception cref="AggregateException">One or more exceptions occurred during the invocation of tasks.</exception>
+        /// <param name="tasks">The tasks to wait for.</param>
+        /// <returns>A task that represents the completion of all supplied tasks.</returns>
+        /// <remarks>
+        /// All supplied tasks are observed. If one or more tasks fail or are canceled, the returned task
+        /// throws an <see cref="AggregateException"/> containing all exceptions, including
+        /// <see cref="OperationCanceledException"/> instances.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="tasks"/> is <see langword="null"/>.</exception>
+        /// <exception cref="AggregateException">One or more tasks failed or were canceled.</exception>
         public static ValueTask WhenAll(params ValueTask[] tasks)
         {
             ArgumentNullException.ThrowIfNull(tasks);
@@ -99,12 +115,16 @@ public static class ValueTaskExtensions
         }
 
         /// <summary>
-        /// Executes a variable number of ValueTasks concurrently and returns a task that completes when all the tasks have completed.
+        /// Asynchronously waits for all supplied <see cref="ValueTask"/> instances to complete.
         /// </summary>
-        /// <param name="tasks">An array of ValueTasks to be executed.</param>
-        /// <returns>A ValueTask that represents the completion of all provided tasks. If any of the tasks fail, an AggregateException is thrown.</returns>
-        /// <exception cref="ArgumentNullException"> The <paramref name="tasks"/> argument was null.</exception>
-        /// <exception cref="AggregateException">One or more exceptions occurred during the invocation of tasks.</exception>
+        /// <param name="tasks">The tasks to wait for.</param>
+        /// <returns>A task that represents the completion of all supplied tasks.</returns>
+        /// <remarks>
+        /// All supplied tasks are observed. If one or more tasks fail or are canceled, the returned task
+        /// throws an <see cref="AggregateException"/> containing all exceptions, including
+        /// <see cref="OperationCanceledException"/> instances.
+        /// </remarks>
+        /// <exception cref="AggregateException">One or more tasks failed or were canceled.</exception>
         public static ValueTask WhenAll(params ReadOnlySpan<ValueTask> tasks)
         {
             if (tasks.IsEmpty)
@@ -115,13 +135,21 @@ public static class ValueTaskExtensions
         }
 
         /// <summary>
-        /// Executes a collection of ValueTasks concurrently and returns their results as an array.
+        /// Asynchronously waits for all supplied <see cref="ValueTask{TResult}"/> instances to complete
+        /// and returns their results in the same order as the supplied tasks.
         /// </summary>
-        /// <typeparam name="TResult">The type of the result produced by the ValueTasks.</typeparam>
-        /// <param name="tasks">An enumerable collection of ValueTasks to be executed.</param>
-        /// <returns>A ValueTask that represents the completion of all provided tasks. If any of the tasks fail, an AggregateException is thrown.</returns>
-        /// <exception cref="ArgumentNullException">The <paramref name="tasks"/> argument was null.</exception>
-        /// <exception cref="AggregateException">One or more exceptions occurred during the invocation of tasks.</exception>
+        /// <typeparam name="TResult">The type of the result produced by the tasks.</typeparam>
+        /// <param name="tasks">The tasks to wait for.</param>
+        /// <returns>
+        /// A task that represents the completion of all supplied tasks and contains their results.
+        /// </returns>
+        /// <remarks>
+        /// All supplied tasks are observed. If one or more tasks fail or are canceled, the returned task
+        /// throws an <see cref="AggregateException"/> containing all exceptions, including
+        /// <see cref="OperationCanceledException"/> instances.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="tasks"/> is <see langword="null"/>.</exception>
+        /// <exception cref="AggregateException">One or more tasks failed or were canceled.</exception>
         public static ValueTask<TResult[]> WhenAll<TResult>(IEnumerable<ValueTask<TResult>> tasks)
         {
             ArgumentNullException.ThrowIfNull(tasks);
@@ -155,13 +183,21 @@ public static class ValueTaskExtensions
         }
 
         /// <summary>
-        /// Executes a variable number of ValueTasks concurrently and returns their results as an array.
+        /// Asynchronously waits for all supplied <see cref="ValueTask{TResult}"/> instances to complete
+        /// and returns their results in the same order as the supplied tasks.
         /// </summary>
-        /// <typeparam name="TResult">The type of the result produced by the ValueTasks.</typeparam>
-        /// <param name="tasks">A variable number of ValueTasks to be executed.</param>
-        /// <returns>A ValueTask that represents the completion of all provided tasks. If any of the tasks fail, an AggregateException is thrown.</returns>
-        /// <exception cref="ArgumentNullException">The <paramref name="tasks"/> argument was null.</exception>
-        /// <exception cref="AggregateException">One or more exceptions occurred during the invocation of tasks.</exception>
+        /// <typeparam name="TResult">The type of the result produced by the tasks.</typeparam>
+        /// <param name="tasks">The tasks to wait for.</param>
+        /// <returns>
+        /// A task that represents the completion of all supplied tasks and contains their results.
+        /// </returns>
+        /// <remarks>
+        /// All supplied tasks are observed. If one or more tasks fail or are canceled, the returned task
+        /// throws an <see cref="AggregateException"/> containing all exceptions, including
+        /// <see cref="OperationCanceledException"/> instances.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="tasks"/> is <see langword="null"/>.</exception>
+        /// <exception cref="AggregateException">One or more tasks failed or were canceled.</exception>
         public static ValueTask<TResult[]> WhenAll<TResult>(params ValueTask<TResult>[] tasks)
         {
             ArgumentNullException.ThrowIfNull(tasks);
@@ -170,13 +206,20 @@ public static class ValueTaskExtensions
         }
 
         /// <summary>
-        /// Executes a variable number of ValueTasks concurrently and returns their results as an array.
+        /// Asynchronously waits for all supplied <see cref="ValueTask{TResult}"/> instances to complete
+        /// and returns their results in the same order as the supplied tasks.
         /// </summary>
-        /// <typeparam name="TResult">The type of the result produced by the ValueTasks.</typeparam>
-        /// <param name="tasks">An array of ValueTasks to be executed.</param>
-        /// <returns>A ValueTask that represents the completion of all provided tasks. If any of the tasks fail, an AggregateException is thrown.</returns>
-        /// <exception cref="ArgumentNullException"> The <paramref name="tasks"/> argument was null.</exception>
-        /// <exception cref="AggregateException">One or more exceptions occurred during the invocation of tasks.</exception>
+        /// <typeparam name="TResult">The type of the result produced by the tasks.</typeparam>
+        /// <param name="tasks">The tasks to wait for.</param>
+        /// <returns>
+        /// A task that represents the completion of all supplied tasks and contains their results.
+        /// </returns>
+        /// <remarks>
+        /// All supplied tasks are observed. If one or more tasks fail or are canceled, the returned task
+        /// throws an <see cref="AggregateException"/> containing all exceptions, including
+        /// <see cref="OperationCanceledException"/> instances.
+        /// </remarks>
+        /// <exception cref="AggregateException">One or more tasks failed or were canceled.</exception>
         public static ValueTask<TResult[]> WhenAll<TResult>(params ReadOnlySpan<ValueTask<TResult>> tasks)
         {
             if (tasks.IsEmpty)
@@ -188,12 +231,17 @@ public static class ValueTaskExtensions
     }
 
     /// <summary>
-    /// Executes a collection of ValueTasks concurrently and returns a task that completes when all the tasks have completed.
+    /// Asynchronously waits for all supplied <see cref="ValueTask"/> instances to complete.
     /// </summary>
-    /// <param name="tasks">A read-only list of ValueTasks to be executed.</param>
-    /// <returns>A ValueTask that represents the completion of all provided tasks. If any of the tasks fail, an AggregateException is thrown.</returns>
-    /// <exception cref="ArgumentNullException"> The <paramref name="tasks"/> argument was null.</exception>
-    /// <exception cref="AggregateException">One or more exceptions occurred during the invocation of tasks.</exception>
+    /// <param name="tasks">The tasks to wait for.</param>
+    /// <returns>A task that represents the completion of all supplied tasks.</returns>
+    /// <remarks>
+    /// All supplied tasks are observed. If one or more tasks fail or are canceled, the returned task
+    /// throws an <see cref="AggregateException"/> containing all exceptions, including
+    /// <see cref="OperationCanceledException"/> instances.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="tasks"/> is <see langword="null"/>.</exception>
+    /// <exception cref="AggregateException">One or more tasks failed or were canceled.</exception>
     public static async ValueTask WhenAll(this IReadOnlyList<ValueTask> tasks)
     {
         ArgumentNullException.ThrowIfNull(tasks);
@@ -226,13 +274,21 @@ public static class ValueTaskExtensions
     }
 
     /// <summary>
-    /// Executes a collection of ValueTasks concurrently and returns their results as an array.
+    /// Asynchronously waits for all supplied <see cref="ValueTask{TResult}"/> instances to complete
+    /// and returns their results in the same order as the supplied tasks.
     /// </summary>
-    /// <typeparam name="TResult">The type of the result produced by the ValueTasks.</typeparam>
-    /// <param name="tasks">A read-only list of ValueTasks to be executed.</param>
-    /// <returns>A ValueTask that represents the completion of all provided tasks. If any of the tasks fail, an AggregateException is thrown.</returns>
-    /// <exception cref="ArgumentNullException"> The <paramref name="tasks"/> argument was null.</exception>
-    /// <exception cref="AggregateException">One or more exceptions occurred during the invocation of tasks.</exception>
+    /// <typeparam name="TResult">The type of the result produced by the tasks.</typeparam>
+    /// <param name="tasks">The tasks to wait for.</param>
+    /// <returns>
+    /// A task that represents the completion of all supplied tasks and contains their results.
+    /// </returns>
+    /// <remarks>
+    /// All supplied tasks are observed. If one or more tasks fail or are canceled, the returned task
+    /// throws an <see cref="AggregateException"/> containing all exceptions, including
+    /// <see cref="OperationCanceledException"/> instances.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="tasks"/> is <see langword="null"/>.</exception>
+    /// <exception cref="AggregateException">One or more tasks failed or were canceled.</exception>
     public static async ValueTask<TResult[]> WhenAll<TResult>(this IReadOnlyList<ValueTask<TResult>> tasks)
     {
         ArgumentNullException.ThrowIfNull(tasks);

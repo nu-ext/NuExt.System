@@ -35,17 +35,25 @@ partial class IOUtils
     /// Gets the directory name from a full path.
     /// </summary>
     /// <param name="fullPath">The full path to the directory.</param>
-    /// <returns>The directory name if it exists; otherwise, returns the original path.</returns>
+    /// <returns>
+    /// The final directory name component, or the original path if <paramref name="fullPath"/> represents a file system root.
+    /// </returns>
     public static string GetDirectoryName(string fullPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(fullPath);
 
-        if (fullPath.Length <= 3)
+        string trimmedPath = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (trimmedPath.Length == 0)
         {
             return fullPath;
         }
 
-        string trimmedPath = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string? root = Path.GetPathRoot(fullPath);
+        if (!string.IsNullOrEmpty(root) && string.Equals(trimmedPath, root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+        {
+            return fullPath;
+        }
+
         return Path.GetFileName(trimmedPath);
     }
 
@@ -63,11 +71,11 @@ partial class IOUtils
         const int maxAttempts = 65000;
         var originalPath = path;
         int i = 0;
-        while (Directory.Exists(path) && i++ < maxAttempts)
+        while ((Directory.Exists(path) || File.Exists(path)) && i++ < maxAttempts)
         {
             path = $"{originalPath} ({i})";
         }
-        if (i >= maxAttempts)
+        if (i > maxAttempts)
         {
             Throw.InvalidOperationException($"Unable to find a free directory name after {maxAttempts} attempts.");
         }

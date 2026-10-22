@@ -148,8 +148,12 @@ public sealed class Lifetime : Disposable, ILifetime
                 exceptions.Add(ex);
             }
         }
+
+        Array.Clear(snapshot, 0, count);
         pool.Return(snapshot);
+
         Debug.Assert(IsTerminated, $"{nameof(Lifetime)} is not terminated");
+
         if (exceptions is not null)
         {
             throw new AggregateException(exceptions);

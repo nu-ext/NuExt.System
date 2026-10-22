@@ -63,16 +63,37 @@ partial class IOUtils
         return info.Length;
     }
 
+    /// <summary>
+    /// Attempts to get the size of the specified file.
+    /// </summary>
+    /// <param name="fullPath">The path of the file.</param>
+    /// <param name="size">
+    /// When this method returns <see langword="true"/>, contains the file size in bytes;
+    /// otherwise, <c>-1</c>.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> if the file exists and its size was retrieved successfully;
+    /// otherwise, <see langword="false"/>.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="fullPath"/> is <see langword="null"/> or empty.
+    /// </exception>
     public static bool TryGetFileSize(string fullPath, out long size)
     {
         ArgumentException.ThrowIfNullOrEmpty(fullPath);
 
-        var info = new FileInfo(fullPath);
-
-        if (info.Exists)
+        try
         {
-            size = info.Length;
-            return true;
+            var info = new FileInfo(fullPath);
+            if (info.Exists)
+            {
+                size = info.Length;
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.Assert(false, ex.Message);
         }
 
         size = -1;
@@ -91,7 +112,7 @@ partial class IOUtils
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
 
-        if (!File.Exists(path))
+        if (!File.Exists(path) && !Directory.Exists(path))
         {
             return path;
         }
@@ -111,8 +132,8 @@ partial class IOUtils
             sb.AppendFormat(CultureInfo.InvariantCulture, format, template, i, ext);
             string fileName = sb.ToString();
             newPath = Path.Combine(dir, fileName);
-        } while (File.Exists(newPath) && ++i < maxAttempts);
-        if (i >= maxAttempts)
+        } while ((File.Exists(newPath) || Directory.Exists(newPath)) && ++i <= maxAttempts);
+        if (i > maxAttempts)
         {
             Throw.InvalidOperationException($"Unable to find a free file name after {maxAttempts} attempts.");
         }

@@ -16,8 +16,13 @@ public static class FormatUtils
     /// <param name="provider">An object that supplies culture-specific formatting information.</param>
     /// <param name="size">The size in bytes to be formatted.</param>
     /// <returns>A human-readable string representation of the size with the appropriate unit.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="size"/> is negative.
+    /// </exception>
     public static string FormatSize(IFormatProvider? provider, long size)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(size);
+
         FormattableString message = size switch
         {
             < _1KB => $"{size} B",

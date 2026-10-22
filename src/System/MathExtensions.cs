@@ -6,6 +6,9 @@ using System.Runtime.CompilerServices;
 
 namespace System;
 
+/// <summary>
+/// Provides compatibility implementations of mathematical operations.
+/// </summary>
 public static class MathExtensions
 {
 #if !NET5_0_OR_GREATER && !NETSTANDARD2_1_OR_GREATER

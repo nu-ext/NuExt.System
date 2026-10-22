@@ -14,6 +14,10 @@ public class AssemblyInfo
         Assembly = assembly ?? throw new ArgumentNullException(nameof(assembly));
         AssemblyName = Assembly.GetName();
         Version = AssemblyName.Version;
+        Company = Assembly.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company;
+        Copyright = Assembly.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright;
+        Product = Assembly.GetCustomAttribute<AssemblyProductAttribute>()?.Product;
+        Title = Assembly.GetCustomAttribute<AssemblyTitleAttribute>()?.Title;
     }
 
     /// <summary>
@@ -36,50 +40,22 @@ public class AssemblyInfo
     /// <summary>
     /// Gets the company name from the assembly's attributes.
     /// </summary>
-    public string? Company
-    {
-        get
-        {
-            field ??= (Attribute.GetCustomAttribute(Assembly, typeof(AssemblyCompanyAttribute)) as AssemblyCompanyAttribute)?.Company;
-            return field;
-        }
-    }
+    public string? Company { get; }
 
     /// <summary>
     /// Gets the copyright information from the assembly's attributes.
     /// </summary>
-    public string? Copyright
-    {
-        get
-        {
-            field ??= (Attribute.GetCustomAttribute(Assembly, typeof(AssemblyCopyrightAttribute)) as AssemblyCopyrightAttribute)?.Copyright;
-            return field;
-        }
-    }
+    public string? Copyright { get; }
 
     /// <summary>
     /// Gets the product name from the assembly's attributes.
     /// </summary>
-    public string? Product
-    {
-        get
-        {
-            field ??= (Attribute.GetCustomAttribute(Assembly, typeof(AssemblyProductAttribute)) as AssemblyProductAttribute)?.Product;
-            return field;
-        }
-    }
+    public string? Product { get; }
 
     /// <summary>
     /// Gets the title of the assembly from the assembly's attributes.
     /// </summary>
-    public string? Title
-    {
-        get
-        {
-            field ??= (Attribute.GetCustomAttribute(Assembly, typeof(AssemblyTitleAttribute)) as AssemblyTitleAttribute)?.Title;
-            return field;
-        }
-    }
+    public string? Title { get; }
 
     /// <summary>
     /// Gets the name of the assembly.

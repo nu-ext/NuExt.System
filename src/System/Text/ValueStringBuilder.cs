@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 namespace System.Text;
 
 [SuppressMessage("Style", "IDE0057:Slice can be simplified", Justification = "<Pending>")]
+[DebuggerDisplay("{DebuggerDisplay,nq}")]
 public ref partial struct ValueStringBuilder
 {
     private char[]? _arrayToReturnToPool;
@@ -27,7 +28,9 @@ public ref partial struct ValueStringBuilder
 
     public ValueStringBuilder(int initialCapacity)
     {
-        _arrayToReturnToPool = ArrayPool<char>.Shared.Rent(initialCapacity);
+        ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
+
+        _arrayToReturnToPool = initialCapacity == 0 ? null : ArrayPool<char>.Shared.Rent(initialCapacity);
         _chars = _arrayToReturnToPool;
         _pos = 0;
     }
@@ -39,6 +42,10 @@ public ref partial struct ValueStringBuilder
         {
             Debug.Assert(value >= 0);
             Debug.Assert(value <= _chars.Length);
+            if ((uint)value > (uint)_chars.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
             _pos = value;
         }
     }
@@ -47,11 +54,11 @@ public ref partial struct ValueStringBuilder
 
     public void EnsureCapacity(int capacity)
     {
-        // This is not expected to be called this with negative capacity
+        // Negative capacity is always invalid, even when the current buffer is empty.
         Debug.Assert(capacity >= 0);
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
 
-        // If the caller has a bug and calls this with negative capacity, make sure to call Grow to throw an exception.
-        if ((uint)capacity > (uint)_chars.Length)
+        if (capacity > _chars.Length)
             Grow(capacity - _pos);
     }
 
@@ -81,10 +88,17 @@ public ref partial struct ValueStringBuilder
         get
         {
             Debug.Assert(index < _pos);
+            if ((uint)index >= (uint)_pos)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index));
+            }
             return ref _chars[index];
         }
     }
 
+    // ToString() clears the builder, so we need a side-effect free debugger display.
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private readonly string DebuggerDisplay => AsSpan().ToString();
     public override string ToString()
     {
         string s = _pos == 0 ? string.Empty : _chars.Slice(0, _pos).ToString();
@@ -97,10 +111,21 @@ public ref partial struct ValueStringBuilder
 
     public readonly ReadOnlySpan<char> AsSpan() => _chars.Slice(0, _pos);
     public readonly ReadOnlySpan<char> AsSpan(int start) => _chars.Slice(start, _pos - start);
-    public readonly ReadOnlySpan<char> AsSpan(int start, int length) => _chars.Slice(start, length);
+    public readonly ReadOnlySpan<char> AsSpan(int start, int length)
+    {
+        if ((uint)start > (uint)_pos || (uint)length > (uint)(_pos - start))
+        {
+            throw new ArgumentOutOfRangeException();
+        }
+
+        return _chars.Slice(start, length);
+    }
 
     public void Insert(int index, char value, int count)
     {
+        if ((uint)index > (uint)_pos) throw new ArgumentOutOfRangeException(nameof(index));
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+
         if (_pos > _chars.Length - count)
         {
             Grow(count);
@@ -114,6 +139,8 @@ public ref partial struct ValueStringBuilder
 
     public void Insert(int index, string? s)
     {
+        if ((uint)index > (uint)_pos) throw new ArgumentOutOfRangeException(nameof(index));
+
         if (s == null)
         {
             return;
@@ -190,6 +217,8 @@ public ref partial struct ValueStringBuilder
 
     public void Append(char c, int count)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+
         if (_pos > _chars.Length - count)
         {
             Grow(count);
@@ -206,19 +235,28 @@ public ref partial struct ValueStringBuilder
     //[OverloadResolutionPriority(-1)]
     public void Append(scoped ReadOnlySpan<char> value)
     {
+        char[]? copy = null;
+        if (value.Overlaps(_chars) && _pos > _chars.Length - value.Length)
+        {
+            copy = value.ToArray();
+            value = copy;
+        }
+
         int pos = _pos;
         if (pos > _chars.Length - value.Length)
         {
             Grow(value.Length);
         }
 
-        value.CopyTo(_chars.Slice(_pos));
+        value.CopyTo(_chars.Slice(pos));
         _pos += value.Length;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<char> AppendSpan(int length)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(length);
+
         int origPos = _pos;
         if (origPos > _chars.Length - length)
         {
@@ -265,9 +303,11 @@ public ref partial struct ValueStringBuilder
         _chars.Slice(0, _pos).CopyTo(poolArray);
 
         char[]? toReturn = _arrayToReturnToPool;
+        int oldLength = _chars.Length;
         _chars = _arrayToReturnToPool = poolArray;
         if (toReturn != null)
         {
+            Array.Clear(toReturn, 0, oldLength);
             ArrayPool<char>.Shared.Return(toReturn);
         }
     }
@@ -276,9 +316,11 @@ public ref partial struct ValueStringBuilder
     public void Dispose()
     {
         char[]? toReturn = _arrayToReturnToPool;
+        int length = _chars.Length;
         this = default; // for safety, to avoid using pooled array if this instance is erroneously appended to again
         if (toReturn != null)
         {
+            Array.Clear(toReturn, 0, length);
             ArrayPool<char>.Shared.Return(toReturn);
         }
     }

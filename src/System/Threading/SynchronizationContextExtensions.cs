@@ -24,9 +24,11 @@ public static class SynchronizationContextExtensions
         /// otherwise, <see langword="false"/>.
         /// </value>
         /// <remarks>
-        /// This check is based on type names and serves as a fast-path optimization hint.
-        /// When <see langword="true"/>, the context can be safely assumed thread-affine.
-        /// When <see langword="false"/>, further behavioral checks may be required.
+        /// This check recognizes implementations of <see cref="IThreadAffineSynchronizationContext"/>
+        /// and a predefined set of synchronization context type names. A value of
+        /// <see langword="true"/> indicates that the context type is known to be thread-affine;
+        /// it does not guarantee that an access-checking delegate can be created for that instance.
+        /// A value of <see langword="false"/> does not prove that the context is not thread-affine.
         /// </remarks>
         public bool IsThreadAffineKnown =>
             synchronizationContext is IThreadAffineSynchronizationContext ||
@@ -76,17 +78,19 @@ public static class SynchronizationContextExtensions
         }
 
         /// <summary>
-        /// Executes the specified delegate asynchronously using the <see cref="SynchronizationContext"/>.
+        /// Queues the specified delegate for asynchronous execution on the synchronization context.
         /// </summary>
-        /// <param name="method">A delegate to a method that takes parameters of the same number and type that are contained in the args parameter.</param>
-        /// <param name="args">An array of objects to pass as arguments to the given method. This can be <see langword="null"/> if no arguments are needed.</param>
-        /// <returns>A <see cref="Task{Object}"/> that represents the asynchronous operation. 
-        /// The task result is the return value from the delegate being invoked, or <see langword="null"/> if the delegate has no return value.</returns>
-        /// <exception cref="ArgumentNullException">Thrown when the <paramref name="method"/> parameter is <see langword="null"/>.</exception>
-        /// <remarks>
-        /// This method returns immediately and does not wait for the asynchronous operation to complete.
-        /// For delegates with a return value, use <see cref="Task{TResult}.Result"/> to get the result.
-        /// </remarks>
+        /// <param name="method">The delegate to invoke.</param>
+        /// <param name="args">
+        /// The arguments to pass to <paramref name="method"/>, or an empty array if the delegate has no parameters.
+        /// </param>
+        /// <returns>
+        /// A task that completes when the delegate finishes. The task result is the delegate's return value,
+        /// or <see langword="null"/> if the delegate does not return a value.
+        /// </returns>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="method"/> is <see langword="null"/>.
+        /// </exception>
         public Task<object?> BeginInvoke(Delegate method, params object?[] args)
         {
             ArgumentNullException.ThrowIfNull(method);

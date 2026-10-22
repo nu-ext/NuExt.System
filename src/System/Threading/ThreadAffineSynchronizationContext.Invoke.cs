@@ -7,16 +7,17 @@ partial class ThreadAffineSynchronizationContext
     #region Methods
 
     /// <summary>
-    /// Executes the specified delegate asynchronously on the appropriate thread or context.
+    /// Queues the specified delegate for asynchronous execution on the associated thread or context.
     /// </summary>
-    /// <param name="method">A delegate to a method that takes parameters of the same number and type that are contained in the args parameter.</param>
-    /// <param name="args">An array of objects to pass as arguments to the given method. This can be <see langword="null"/> if no arguments are needed.</param>
-    /// <returns>A <see cref="Task{Object}"/> that represents the asynchronous operation. 
-    /// The task result is the return value from the delegate being invoked, or <see langword="null"/> if the delegate has no return value.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when the <paramref name="method"/> parameter is <see langword="null"/>.</exception>
-    /// <remarks>
-    /// This method returns immediately and does not wait for the asynchronous operation to complete.
-    /// </remarks>
+    /// <param name="method">The delegate to invoke.</param>
+    /// <param name="args">
+    /// The arguments to pass to <paramref name="method"/>, or an empty array if the delegate has no parameters.
+    /// </param>
+    /// <returns>
+    /// A task that completes when the delegate finishes. The task result is the delegate's return value,
+    /// or <see langword="null"/> if the delegate does not return a value.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="method"/> is <see langword="null"/>.</exception>
     public Task<object?> BeginInvoke(Delegate method, params object?[] args)
     {
         ArgumentNullException.ThrowIfNull(method);
@@ -142,7 +143,9 @@ partial class ThreadAffineSynchronizationContext
     /// Executes the specified asynchronous delegate that returns a <see cref="Task{TResult}"/> on the appropriate thread or context.
     /// </summary>
     /// <typeparam name="TResult">The type of the result produced by the returned <see cref="Task{TResult}"/>.</typeparam>
-    /// <param name="callback">A <see cref="Func{TResult}"/> delegate that returns a <see cref="Task{TResult}"/> to invoke, where <c>TResult</c> is <see cref="Task{TResult}"/>.</param>
+    /// <param name="callback">
+    /// A delegate that returns the <see cref="Task{TResult}"/> to invoke.
+    /// </param>
     /// <returns>
     /// A <see cref="Task{TResult}"/> that represents the execution of the provided async delegate. Its result is the result
     /// of the <see cref="Task{TResult}"/> returned by <paramref name="callback"/>.

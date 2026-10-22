@@ -5,6 +5,9 @@ using System.Runtime.CompilerServices;
 
 namespace System;
 
+/// <summary>
+/// Provides compatibility implementations of exception helper methods.
+/// </summary>
 public static class ExceptionExtensions
 {
     extension(ArgumentException)

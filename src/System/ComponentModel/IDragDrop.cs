@@ -1,4 +1,4 @@
-﻿namespace System.Windows;
+﻿namespace System.ComponentModel;
 
 /// <summary>
 /// Defines methods and properties for drag-and-drop functionality.
@@ -15,6 +15,7 @@ public interface IDragDrop
     /// </summary>
     /// <param name="draggedObject">The object being dragged.</param>
     /// <returns><see langword="true"/> if the object can be dropped; otherwise, <see langword="false"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="draggedObject"/> is <see langword="null"/>.</exception>
     bool CanDrop(IDragDrop draggedObject);
 
     /// <summary>
@@ -22,5 +23,6 @@ public interface IDragDrop
     /// </summary>
     /// <param name="draggedObject">The object being dragged.</param>
     /// <returns><see langword="true"/> if the drop operation was successful; otherwise, <see langword="false"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="draggedObject"/> is <see langword="null"/>.</exception>
     bool Drop(IDragDrop draggedObject);
 }

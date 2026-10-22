@@ -27,7 +27,8 @@ public static class Bootstrap
     /// <paramref name="checkAccess"/> is <see langword="null"/>.
     /// </exception>
     /// <remarks>
-    /// If a delegate is already registered for <typeparamref name="TContext"/>, it is replaced.
+    /// Registration must be completed before the first access check for the specified context type.
+    /// If a delegate is already registered, it is replaced for subsequently initialized helpers.
     /// </remarks>
     public static void RegisterCheckAccessDelegate<TContext>(Func<TContext, bool> checkAccess)
         where TContext : SynchronizationContext
@@ -46,6 +47,9 @@ public static class Bootstrap
     /// <returns>
     /// <see langword="true"/> if a registration existed and was removed; otherwise, <see langword="false"/>.
     /// </returns>
+    /// <remarks>
+    /// Unregistration affects subsequently initialized helpers and does not invalidate delegates already cached by existing helpers.
+    /// </remarks>
     public static bool UnregisterCheckAccessDelegate<TContext>()
         where TContext : SynchronizationContext
     {

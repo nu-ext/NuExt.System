@@ -160,7 +160,7 @@ public static class Throw
     /// <param name="instance">The object whose type's full name should be included in any resulting <see cref="System.ObjectDisposedException"/>.</param>
     /// <param name="message">The error message that explains the reason for the exception.</param>
     [DoesNotReturn]
-    public static void ObjectDisposedException(object instance, string? message = null)
+    public static void ObjectDisposedException(object? instance, string? message = null)
     {
         throw !string.IsNullOrEmpty(message) ? new ObjectDisposedException(objectName: instance?.GetType().FullName, message: message) : new ObjectDisposedException(objectName: instance?.GetType().FullName);
     }
@@ -179,7 +179,7 @@ public static class Throw
     /// <param name="instance">The object whose type's full name should be included in any resulting <see cref="System.ObjectDisposedException"/>.</param>
     /// <param name="message">The error message that explains the reason for the exception.</param>
     /// <exception cref="System.ObjectDisposedException">The <paramref name="condition"/> is <see langword="true"/>.</exception>
-    public static void ObjectDisposedExceptionIf([DoesNotReturnIf(true)] bool condition, object instance, string? message = null)
+    public static void ObjectDisposedExceptionIf([DoesNotReturnIf(true)] bool condition, object? instance, string? message = null)
     {
         if (condition)
         {
@@ -192,7 +192,7 @@ public static class Throw
     /// <param name="type">The type whose full name should be included in any resulting <see cref="System.ObjectDisposedException"/>.</param>
     /// <param name="message">The error message that explains the reason for the exception.</param>
     /// <exception cref="System.ObjectDisposedException">The <paramref name="condition"/> is <see langword="true"/>.</exception>
-    public static void ObjectDisposedExceptionIf([DoesNotReturnIf(true)] bool condition, Type type, string? message = null)
+    public static void ObjectDisposedExceptionIf([DoesNotReturnIf(true)] bool condition, Type? type, string? message = null)
     {
         if (condition)
         {

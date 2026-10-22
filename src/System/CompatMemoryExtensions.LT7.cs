@@ -691,11 +691,8 @@ partial class CompatMemoryExtensions
         {
             other = other.Slice(0, span.Length);
         }
-        else if (span.Length > other.Length)
-        {
-            span = span.Slice(0, other.Length);
-        }
-        Debug.Assert(span.Length == other.Length);
+
+        span = span.Slice(0, other.Length);
     }
 
 }

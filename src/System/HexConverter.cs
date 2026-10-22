@@ -5,20 +5,47 @@ using System.Runtime.CompilerServices;
 
 namespace System;
 
+/// <summary>
+/// Provides methods for converting and validating ASCII hexadecimal characters.
+/// </summary>
 public static class HexConverter
 {
+    /// <summary>
+    /// Converts an ASCII hexadecimal character to its numeric value.
+    /// </summary>
+    /// <param name="c">The character code to convert.</param>
+    /// <returns>
+    /// A value from 0 through 15 if <paramref name="c"/> represents an ASCII hexadecimal
+    /// character; otherwise, 255.
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int FromChar(int c)
     {
-        return (c >= CharToHexLookup.Length) ? 0xFF : CharToHexLookup[c];
+        return (uint)c < (uint)CharToHexLookup.Length ? CharToHexLookup[c] : 0xFF;
     }
 
+    /// <summary>
+    /// Converts an uppercase ASCII hexadecimal character to its numeric value.
+    /// </summary>
+    /// <param name="c">The character code to convert.</param>
+    /// <returns>
+    /// A value from 0 through 15 if <paramref name="c"/> represents an uppercase ASCII
+    /// hexadecimal character; otherwise, 255.
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int FromUpperChar(int c)
     {
-        return (c > 71) ? 0xFF : CharToHexLookup[c];
+        return (uint)c <= 'F' ? CharToHexLookup[c] : 0xFF;
     }
 
+    /// <summary>
+    /// Converts a lowercase ASCII hexadecimal character to its numeric value.
+    /// </summary>
+    /// <param name="c">The character code to convert.</param>
+    /// <returns>
+    /// A value from 0 through 15 if <paramref name="c"/> represents a lowercase ASCII
+    /// hexadecimal character; otherwise, 255.
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int FromLowerChar(int c)
     {
@@ -35,6 +62,14 @@ public static class HexConverter
         return 0xFF;
     }
 
+    /// <summary>
+    /// Determines whether the specified character is an ASCII hexadecimal character.
+    /// </summary>
+    /// <param name="c">The character code to evaluate.</param>
+    /// <returns>
+    /// <see langword="true"/> if <paramref name="c"/> is an ASCII hexadecimal character;
+    /// otherwise, <see langword="false"/>.
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsHexChar(int c)
     {
@@ -66,12 +101,28 @@ public static class HexConverter
         return FromChar(c) != 0xFF;
     }
 
+    /// <summary>
+    /// Determines whether the specified character is an uppercase ASCII hexadecimal character.
+    /// </summary>
+    /// <param name="c">The character code to evaluate.</param>
+    /// <returns>
+    /// <see langword="true"/> if <paramref name="c"/> is an ASCII digit or an uppercase
+    /// hexadecimal letter; otherwise, <see langword="false"/>.
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsHexUpperChar(int c)
     {
         return ((uint)(c - '0') <= 9) || ((uint)(c - 'A') <= ('F' - 'A'));
     }
 
+    /// <summary>
+    /// Determines whether the specified character is a lowercase ASCII hexadecimal character.
+    /// </summary>
+    /// <param name="c">The character code to evaluate.</param>
+    /// <returns>
+    /// <see langword="true"/> if <paramref name="c"/> is an ASCII digit or a lowercase
+    /// hexadecimal letter; otherwise, <see langword="false"/>.
+    /// </returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsHexLowerChar(int c)
     {

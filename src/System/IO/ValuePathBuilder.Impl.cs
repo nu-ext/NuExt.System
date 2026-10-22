@@ -24,13 +24,23 @@ partial struct ValuePathBuilder
 
     public partial ValuePathBuilder(int initialCapacity)
     {
-        _arrayToReturnToPool = ArrayPool<char>.Shared.Rent(initialCapacity);
+        ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
+
+        _arrayToReturnToPool = initialCapacity == 0 ? null : ArrayPool<char>.Shared.Rent(initialCapacity);
         _chars = _arrayToReturnToPool;
         _pos = 0;
     }
 
     public partial ValuePathBuilder(scoped ReadOnlySpan<char> initialPath)
     {
+        if (initialPath.IsEmpty)
+        {
+            _arrayToReturnToPool = null;
+            _chars = default;
+            _pos = 0;
+            return;
+        }
+
         _arrayToReturnToPool = ArrayPool<char>.Shared.Rent(initialPath.Length);
         _chars = _arrayToReturnToPool;
         initialPath.CopyTo(_chars);
@@ -44,8 +54,12 @@ partial struct ValuePathBuilder
     public partial char DirectorySeparatorChar
     {
         readonly get => _directorySeparatorChar ?? Path.DirectorySeparatorChar;
-        set 
-        { 
+        set
+        {
+            if (value != '/' && value != '\\')
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
             _directorySeparatorChar = value;
             _isUnixLikePlatform = PathUtilities.IsUnixLikePlatform(value);
         }
@@ -60,6 +74,10 @@ partial struct ValuePathBuilder
         {
             Debug.Assert(value >= 0);
             Debug.Assert(value <= _chars.Length);
+            if ((uint)value > (uint)_chars.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
             _pos = value;
         }
     }
@@ -69,6 +87,10 @@ partial struct ValuePathBuilder
         get
         {
             Debug.Assert(index < _pos);
+            if ((uint)index >= (uint)_pos)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index));
+            }
             return ref _chars[index];
         }
     }
@@ -111,15 +133,23 @@ partial struct ValuePathBuilder
             return;
         }
 
+        char[]? copy = null;
+        if (s.Overlaps(_chars) && _pos > _chars.Length - s.Length)
+        {
+            copy = s.ToArray();
+            s = copy;
+        }
+
         int pos = _pos;
         if (pos > _chars.Length - s.Length)
         {
             Grow(s.Length);
         }
+
 #if NETFRAMEWORK || NETSTANDARD2_0
-        s.CopyTo(_chars.Slice(_pos));
+        s.CopyTo(_chars.Slice(pos));
 #else
-        s.CopyTo(_chars[_pos..]);
+        s.CopyTo(_chars[pos..]);
 #endif
         _pos += s.Length;
     }
@@ -175,20 +205,23 @@ partial struct ValuePathBuilder
     public partial void Dispose()
     {
         char[]? toReturn = _arrayToReturnToPool;
+        int length = _chars.Length;
         this = default; // Reset the struct
+
         if (toReturn != null)
         {
+            Array.Clear(toReturn, 0, length);
             ArrayPool<char>.Shared.Return(toReturn);
         }
     }
 
     public partial void EnsureCapacity(int capacity)
     {
-        // This is not expected to be called this with negative capacity
+        // Negative capacity is always invalid, even when the current buffer is empty.
         Debug.Assert(capacity >= 0);
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
 
-        // If the caller has a bug and calls this with negative capacity, make sure to call Grow to throw an exception.
-        if ((uint)capacity > (uint)_chars.Length)
+        if (capacity > _chars.Length)
         {
             Grow(capacity - _pos);
         }
@@ -250,9 +283,11 @@ partial struct ValuePathBuilder
         _chars[.._pos].CopyTo(poolArray);
 #endif
         char[]? toReturn = _arrayToReturnToPool;
+        int oldLength = _chars.Length;
         _chars = _arrayToReturnToPool = poolArray;
         if (toReturn != null)
         {
+            Array.Clear(toReturn, 0, oldLength);
             ArrayPool<char>.Shared.Return(toReturn);
         }
     }
@@ -300,28 +335,26 @@ partial struct ValuePathBuilder
 #endif
     }
 
-    public readonly partial ReadOnlySpan<char> AsSpan(int start, int length) => _chars.Slice(start, length);
+    public readonly partial ReadOnlySpan<char> AsSpan(int start, int length)
+    {
+        if ((uint)start > (uint)_pos || (uint)length > (uint)(_pos - start))
+        {
+            throw new ArgumentOutOfRangeException();
+        }
+
+        return _chars.Slice(start, length);
+    }
 
     public partial bool TryCopyTo(scoped Span<char> destination, out int charsWritten)
     {
-        if (_chars
-#if NETFRAMEWORK || NETSTANDARD2_0
-            .Slice(0, _pos)
-#else
-            [.._pos]
-#endif
-            .TryCopyTo(destination))
-        {
-            charsWritten = _pos;
-            Dispose();
-            return true;
-        }
-        else
+        if (!AsSpan().TryCopyTo(destination))
         {
             charsWritten = 0;
-            Dispose();
             return false;
         }
+
+        charsWritten = _pos;
+        return true;
     }
 
     #endregion
@@ -361,14 +394,20 @@ partial struct ValuePathBuilder
         }
 
         int pos = _pos;
-        if (pos > 0)
+        bool addSeparator = pos > 0 &&
+                            !PathUtilities.IsDirectorySeparator(_chars[pos - 1], IsUnixLikePlatform) &&
+                            !PathUtilities.IsDirectorySeparator(path[0], IsUnixLikePlatform);
+
+        if (addSeparator && path.Overlaps(_chars) && pos == _chars.Length)
         {
-            var c = _chars[pos - 1];
-            if (!PathUtilities.IsDirectorySeparator(c, IsUnixLikePlatform) && !PathUtilities.IsDirectorySeparator(path[0], IsUnixLikePlatform))
-            {
-                Add(DirectorySeparatorChar);
-            }
+            path = path.ToArray();
         }
+
+        if (addSeparator)
+        {
+            Add(DirectorySeparatorChar);
+        }
+
         Add(path);
     }
 
@@ -431,8 +470,12 @@ partial struct ValuePathBuilder
     //[OverloadResolutionPriority(-1)]
     public partial bool ChangeFileName(scoped ReadOnlySpan<char> newFileName)
     {
-        var fileNameLength = GetFileName().Length;
+        if (newFileName.Overlaps(_chars))
+        {
+            newFileName = newFileName.ToArray();
+        }
 
+        var fileNameLength = GetFileName().Length;
         _pos -= fileNameLength;
 
         if (newFileName.IsEmpty)
@@ -441,7 +484,7 @@ partial struct ValuePathBuilder
         }
 
         Append(newFileName);
-        return fileNameLength > 0 || newFileName.Length > 0;
+        return true;
     }
 
     public partial bool ChangeFileName(string? newFileName)
@@ -546,7 +589,7 @@ partial struct ValuePathBuilder
 
     public readonly partial bool IsRoot()
     {
-        return _pos == PathUtilities.GetRootLength(AsSpan(), IsUnixLikePlatform);
+        return PathUtilities.IsRoot(AsSpan(), IsUnixLikePlatform);
     }
 
     public partial bool NormalizeDirectorySeparators()

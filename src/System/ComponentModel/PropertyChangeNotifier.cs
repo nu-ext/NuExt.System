@@ -25,6 +25,16 @@ namespace System;
 [DebuggerStepThrough]
 public abstract partial class PropertyChangeNotifier : INotifyPropertyChanged, IDispatcherObject, IDebuggable
 {
+    private sealed record PropertyChangedNotificationState(PropertyChangeNotifier Sender, PropertyChangedEventHandler Handler,
+        PropertyChangedEventArgs E1, PropertyChangedEventArgs E2);
+
+    private static readonly SendOrPostCallback s_propertiesChangedCallback = static state =>
+    {
+        var notification = (PropertyChangedNotificationState)state!;
+        notification.Handler(notification.Sender, notification.E1);
+        notification.Handler(notification.Sender, notification.E2);
+    };
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PropertyChangeNotifier"/> class 
     /// with the specified synchronization context.
@@ -80,17 +90,6 @@ public abstract partial class PropertyChangeNotifier : INotifyPropertyChanged, I
     #endregion
 
     #region Methods
-
-    /// <summary>
-    /// Removes all subscribers from the <see cref="PropertyChanged"/> event.
-    /// </summary>
-    [DebuggerHidden]
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private protected void ClearPropertyChangedHandlers()
-    {
-        PropertyChanged = null;
-    }
 
     /// <summary>
     /// Gets the current subscribers of the PropertyChanged event.
@@ -161,6 +160,28 @@ public abstract partial class PropertyChangeNotifier : INotifyPropertyChanged, I
             }
         }
         handler(this, args);
+    }
+
+    [DebuggerHidden]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    private protected void RaisePropertiesChangedAndClearHandlers(PropertyChangedEventArgs e1, PropertyChangedEventArgs e2)
+    {
+        var handler = PropertyChanged;
+        PropertyChanged = null;
+
+        if (handler == null)
+        {
+            return;
+        }
+
+        if (HasSynchronizationContext && !CheckAccess())
+        {
+            SynchronizationContext!.Post(s_propertiesChangedCallback, new PropertyChangedNotificationState(this, handler, e1, e2));
+            return;
+        }
+
+        handler(this, e1);
+        handler(this, e2);
     }
 
     /// <summary>
@@ -327,6 +348,7 @@ public abstract partial class PropertyChangeNotifier : INotifyPropertyChanged, I
         }
     }
 #endif
+
     /// <summary>
     /// Sets the property and raises the <see cref="PropertyChanged"/> event if the value has changed.
     /// </summary>

@@ -15,7 +15,7 @@ public static class ConditionalWeakTableExtensions
         /// <exception cref="ArgumentNullException"><paramref name="key"/> is <see langword="null"/>.</exception>
         public void AddOrUpdate(TKey key, TValue value)
         {
-            lock (LockPool.Get(key))
+            lock (LockPool.Get(table))
             {
                 table.Remove(key);
                 table.Add(key, value);

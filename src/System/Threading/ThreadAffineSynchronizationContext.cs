@@ -23,7 +23,13 @@ public partial class ThreadAffineSynchronizationContext : SynchronizationContext
     /// Initializes a new instance of the <see cref="ThreadAffineSynchronizationContext"/> class.
     /// </summary>
     /// <param name="innerContext">The synchronization context to wrap.</param>
-    /// <param name="associatedThread">The thread associated with this context.</param>
+    /// <param name="associatedThread">The thread on which <paramref name="innerContext"/> executes its callbacks.</param>
+    /// <remarks>
+    /// The caller must ensure that <paramref name="innerContext"/> dispatches callbacks to
+    /// <paramref name="associatedThread"/>. This relationship cannot be verified by this type.
+    /// Supplying a different thread causes <see cref="CheckAccess"/> and <see cref="VerifyAccess"/>
+    /// to disagree with the actual execution context used by <see cref="Send"/> and <see cref="Post"/>.
+    /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="innerContext"/> is <see langword="null"/> or <paramref name="associatedThread"/> is <see langword="null"/>.</exception>
     public ThreadAffineSynchronizationContext(SynchronizationContext innerContext, Thread associatedThread)
     {
@@ -37,6 +43,11 @@ public partial class ThreadAffineSynchronizationContext : SynchronizationContext
     /// Initializes a new instance of the <see cref="ThreadAffineSynchronizationContext"/> class.
     /// </summary>
     /// <param name="innerContext">The synchronization context to wrap.</param>
+    /// <remarks>
+    /// The current thread is associated with <paramref name="innerContext"/>. The caller must ensure
+    /// that the context executes its callbacks on that thread.
+    /// </remarks>
+    /// <exception cref="ArgumentNullException"><paramref name="innerContext"/> is <see langword="null"/>.</exception>
     public ThreadAffineSynchronizationContext(SynchronizationContext innerContext) : this(innerContext, Thread.CurrentThread)
     {
     }
@@ -52,10 +63,6 @@ public partial class ThreadAffineSynchronizationContext : SynchronizationContext
     /// <inheritdoc/>
     public bool CheckAccess()
     {
-        if (ReferenceEquals(Current, this) || ReferenceEquals(Current, InnerContext))
-        {
-            return true;
-        }
         return Thread.CurrentThread == Thread;
     }
 
@@ -91,9 +98,7 @@ public partial class ThreadAffineSynchronizationContext : SynchronizationContext
     /// <inheritdoc/>
     public override SynchronizationContext CreateCopy()
     {
-        return new ThreadAffineSynchronizationContext(
-            InnerContext.CreateCopy(),
-            Thread);
+        return new ThreadAffineSynchronizationContext(InnerContext.CreateCopy(), Thread);
     }
 
     /// <inheritdoc/>
@@ -124,8 +129,12 @@ public partial class ThreadAffineSynchronizationContext : SynchronizationContext
     /// A new <see cref="ThreadAffineSynchronizationContext"/> wrapping <see cref="SynchronizationContext.Current"/>,
     /// or <see langword="null"/> if no current context exists.
     /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="associatedThread"/> is <see langword="null"/>.
+    /// </exception>
     public static ThreadAffineSynchronizationContext? FromCurrent(Thread associatedThread)
     {
+        ArgumentNullException.ThrowIfNull(associatedThread);
         var current = Current;
         return current != null ? new ThreadAffineSynchronizationContext(current, associatedThread) : null;
     }
@@ -136,6 +145,10 @@ public partial class ThreadAffineSynchronizationContext : SynchronizationContext
     /// </summary>
     /// <param name="defaultContext">The default context to use if no current context exists.</param>
     /// <returns>A new <see cref="ThreadAffineSynchronizationContext"/>.</returns>
+    /// <remarks>
+    /// The selected context is associated with the current thread. If <paramref name="defaultContext"/>
+    /// is selected, the caller must ensure that it executes callbacks on the current thread.
+    /// </remarks>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="defaultContext"/> is <see langword="null"/>.
     /// </exception>
@@ -151,19 +164,33 @@ public partial class ThreadAffineSynchronizationContext : SynchronizationContext
     /// or a default context if none exists.
     /// </summary>
     /// <param name="defaultContext">The default context to use if no current context exists.</param>
-    /// <param name="associatedThread">The thread to associate with the context.</param>
+    /// <param name="associatedThread">The thread on which the selected context executes its callbacks.</param>
     /// <returns>A new <see cref="ThreadAffineSynchronizationContext"/>.</returns>
+    /// <remarks>
+    /// The caller must ensure that the selected context dispatches callbacks to
+    /// <paramref name="associatedThread"/>. This relationship cannot be verified by this type.
+    /// </remarks>
     /// <exception cref="ArgumentNullException">
     /// <paramref name="defaultContext"/> or <paramref name="associatedThread"/> is <see langword="null"/>.
     /// </exception>
-    public static ThreadAffineSynchronizationContext FromCurrentOrDefault(
-        SynchronizationContext defaultContext,
-        Thread associatedThread)
+    public static ThreadAffineSynchronizationContext FromCurrentOrDefault(SynchronizationContext defaultContext, Thread associatedThread)
     {
         ArgumentNullException.ThrowIfNull(defaultContext);
         ArgumentNullException.ThrowIfNull(associatedThread);
         var context = Current ?? defaultContext;
         return new ThreadAffineSynchronizationContext(context, associatedThread);
+    }
+
+    /// <inheritdoc/>
+    public override void OperationStarted()
+    {
+        InnerContext.OperationStarted();
+    }
+
+    /// <inheritdoc/>
+    public override void OperationCompleted()
+    {
+        InnerContext.OperationCompleted();
     }
 
     /// <inheritdoc/>

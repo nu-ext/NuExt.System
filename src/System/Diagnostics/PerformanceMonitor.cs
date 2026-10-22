@@ -67,12 +67,26 @@ public sealed class PerformanceMonitor: PropertyChangeNotifier
     /// <summary>
     /// Gets or sets the thread info format string.
     /// </summary>
-    public string FormatThreads { get; set; } = "WRK: {0}/{1}";
+    public string FormatThreads { get; set; } = "TRD: {0}";
+
+    /// <summary>
+    /// Gets or sets the worker thread info format string.
+    /// </summary>
+    public string FormatWorkerThreads { get; set; } = "WRK: {0}/{1}";
 
     /// <summary>
     /// Gets the process being monitored.
     /// </summary>
     public Process Process { get; }
+
+    private bool IsCurrentProcess => Process.Id ==
+#if NET5_0_OR_GREATER
+                                     Environment.ProcessId;
+#else
+                                     s_currentProcessId;
+
+    private static readonly int s_currentProcessId = Process.GetCurrentProcess().Id;
+#endif
 
     /// <summary>
     /// Gets or sets a value indicating whether to show CPU usage.
@@ -155,7 +169,7 @@ public sealed class PerformanceMonitor: PropertyChangeNotifier
                 {
                     AppendFormat(sb, ref delimiter, FormatPeakMemoryUsage, FormatUtils.FormatSize(_formatProvider, _processMonitor.GetPeakMemoryUsage()));
                 }
-                if (ShowManagedMemory || ShowPeakManagedMemory)
+                if (IsCurrentProcess && (ShowManagedMemory || ShowPeakManagedMemory))
                 {
                     var gcTotalMemory = GC.GetTotalMemory(false);
                     if (gcTotalMemory > _peakGcMemory)
@@ -174,8 +188,15 @@ public sealed class PerformanceMonitor: PropertyChangeNotifier
                 if (ShowThreads)
                 {
                     var threadCount = _processMonitor.GetThreadCount();
-                    var workerCount = _processMonitor.GetAllocatedWorkerThreads();
-                    AppendFormat(sb, ref delimiter, FormatThreads, workerCount, threadCount);
+                    if (IsCurrentProcess)
+                    {
+                        var workerCount = GetBusyWorkerThreads();
+                        AppendFormat(sb, ref delimiter, FormatWorkerThreads, workerCount, threadCount);
+                    }
+                    else
+                    {
+                        AppendFormat(sb, ref delimiter, FormatThreads, threadCount);
+                    }
                 }
                 FormattedUsage = sb.ToString();
             }
@@ -188,6 +209,28 @@ public sealed class PerformanceMonitor: PropertyChangeNotifier
         {
             Trace.WriteLine($"Performance monitoring error: {ex.Message}");
             Debug.Assert(false, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Gets the number of busy worker threads in the ThreadPool.
+    /// </summary>
+    /// <returns>The number of busy worker threads.</returns>
+    public int GetBusyWorkerThreads()
+    {
+        _ = this;
+        try
+        {
+
+            ThreadPool.GetAvailableThreads(out int availableWorkerThreads, out _);
+            ThreadPool.GetMaxThreads(out int maxWorkerThreads, out _);
+            int busyWorkerThreads = maxWorkerThreads - availableWorkerThreads;
+            return busyWorkerThreads;
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"Error retrieving busy worker threads: {ex.Message}");
+            return 0;
         }
     }
 

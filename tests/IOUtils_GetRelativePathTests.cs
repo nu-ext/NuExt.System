@@ -244,7 +244,7 @@ public class IOUtils_GetRelativePathTests
         string resultDiffDir = IOUtils.GetRelativePath(directory, fullPathDiffCaseDir);
 
         // Assert
-        if (IOUtils.IsCaseSensitiveFileSystem)
+        if (IOUtils.IsCaseSensitivePlatform)
         {
             // (Unix)
             Assert.That(resultDiffDir, Is.Not.EqualTo(resultSame));
@@ -271,7 +271,7 @@ public class IOUtils_GetRelativePathTests
         // Assert
         Assert.That(resultUpper, Is.Not.EqualTo(resultLower));
 
-        if (!IOUtils.IsCaseSensitiveFileSystem)
+        if (!IOUtils.IsCaseSensitivePlatform)
         {
             string combinedLower = Path.Combine(directory, resultLower);
             string combinedUpper = Path.Combine(directory, resultUpper);

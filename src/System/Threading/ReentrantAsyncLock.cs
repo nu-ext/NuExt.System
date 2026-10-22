@@ -5,15 +5,28 @@ using System.Threading.Tasks;
 namespace System.Threading;
 
 /// <summary>
-/// A reentrant lock that supports asynchronous operations and mutual exclusion.
-/// This lock allows the same thread or code flow to enter it multiple times recursively without deadlocks.
-/// It provides synchronous and asynchronous methods for acquiring and releasing the lock,
-/// making it suitable for scenarios where async/await patterns or other forms of asynchronous programming are used.
+/// Provides synchronous and asynchronous mutual exclusion with reentrancy within the same execution flow.
+/// The owning execution flow can enter the lock recursively without deadlocking.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Reentrancy follows the ambient asynchronous execution context. Nested operations that acquire the lock
+/// must remain within the current acquisition scope and must complete before that scope exits.
+/// </para>
+/// <para>
+/// Parallel branches that inherit the owning execution context are treated as reentrant. Mutual exclusion
+/// is therefore not provided between those branches; callers must not access the same protected state
+/// concurrently from multiple branches.
+/// </para>
+/// <para>
+/// Dispose this instance only after all acquisition scopes and pending acquisition operations have completed.
+/// Disposal is not synchronized with active or pending operations.
+/// </para>
+/// </remarks>
 public sealed partial class ReentrantAsyncLock : Disposable
 {
     /// <summary>
-    /// A static counter used to generate unique identifiers for lock instances.
+    /// A static counter used to generate non-zero identifiers for execution flows.
     /// </summary>
     private static int s_idCounter;
 
@@ -25,27 +38,21 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// serving as the primary locking mechanism for this class.
     /// </remarks>
     private readonly SemaphoreSlim _syncLock = new(1, 1);
-    /// <summary>
-    /// An async-local storage for holding a unique identifier for each flow of execution (e.g., thread or task).
-    /// This helps in managing reentrant entries specific to the current context.
-    /// </summary>
+
+    /// An async-local identifier associated with the current execution flow.
     private readonly AsyncLocal<int> _localId = new();
 
     /// <summary>
-    /// An async-local storage to hold the synchronization root (SemaphoreSlim) for reentrant lock acquisition within the same context.
+    /// An async-local synchronization root used for nested lock acquisition within the same execution flow.
     /// </summary>
     private readonly AsyncLocal<SemaphoreSlim?> _localSyncRoot = new();
 
     /// <summary>
-    /// The current count of reentrant entries into the lock by the current flow of execution.
-    /// Used to track how many times the lock has been entered without being fully released.
+    /// The entry depth of the execution flow that currently owns the lock.
     /// </summary>
     private int _currentCount;
 
-    /// <summary>
-    /// The identifier of the current flow of execution that holds the lock.
-    /// Helps in identifying which context currently holds the lock.
-    /// </summary>
+    /// The identifier of the execution flow that currently owns the lock.
     private volatile int _currentId;
 
     /// <summary>
@@ -73,28 +80,16 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// Gets the current reentrant entry count for the lock.
     /// </summary>
     /// <remarks>
-    /// This property indicates how many times the current flow of execution (e.g., thread or task) 
-    /// has entered this reentrant lock. It is particularly useful for debugging and diagnostic purposes 
-    /// to understand the depth of recursive locking.
-    /// 
-    /// Note:
-    /// - The value represents the number of times the lock has been entered without being fully released.
-    /// - This property does not trigger PropertyChanged notifications to avoid potential recursion issues.
+    /// The value represents the entry depth of the execution flow that currently owns the lock.
+    /// It is zero when the lock is not held. This property is intended for debugging and diagnostics.
     /// </remarks>
     public int CurrentCount => _currentCount;
 
     /// <summary>
-    /// Gets the current identifier associated with the lock.
+    /// Gets the identifier of the execution flow that currently owns the lock.
     /// </summary>
     /// <remarks>
-    /// This property returns an identifier that is associated with the current flow of execution 
-    /// (such as a thread or task) holding the lock. It is primarily used internally to manage reentrant locking.
-    /// 
-    /// Note:
-    /// - The identifier helps in tracking which context currently holds the lock.
-    /// - This value can be useful for debugging and diagnostic purposes.
-    /// - This property does not trigger PropertyChanged notifications because it is intended for internal use only,
-    ///   and also to avoid potential recursion issues.
+    /// The value is zero when the lock is not held. This property is intended for internal diagnostics and synchronization validation.
     /// </remarks>
     internal int CurrentId => _currentId;
 
@@ -126,7 +121,8 @@ public sealed partial class ReentrantAsyncLock : Disposable
         get
         {
             CheckDisposed();
-            return _currentId == LocalId && _syncLock.CurrentCount == 0;
+            int localId = _localId.Value;
+            return localId != 0 && _currentId == localId && _syncLock.CurrentCount == 0;
         }
     }
 
@@ -165,17 +161,17 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// </summary>
     /// <remarks>
     /// If the identifier has not been set, it generates a new identifier using the <see cref="NewId"/> method.
-    /// This identifier is unique to the context and helps manage reentrant lock acquisition.
+    /// This non-zero identifier is associated with the current execution flow and is used to manage reentrant lock acquisition.
     /// Primarily intended for internal use.
     /// </remarks>
     internal int LocalId => _localId.Value != 0 ? _localId.Value : (_localId.Value = NewId());
 
     /// <summary>
-    /// Gets or sets the thread-local synchronization root for nested (reentrant) lock acquisition.
+    /// Gets or sets the async-flow-local synchronization root for nested lock acquisition.
     /// </summary>
     /// <remarks>
-    /// This property provides a thread-local <see cref="SemaphoreSlim"/> instance used to manage reentrant locks.
-    /// Intended for internal use only.
+    /// This property provides a <see cref="SemaphoreSlim"/> associated with the current asynchronous execution flow.
+    /// The value flows across asynchronous continuations through <see cref="AsyncLocal{T}"/> and is intended for internal use only.
     /// </remarks>
     internal SemaphoreSlim? SyncRoot
     {
@@ -188,9 +184,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     #region Methods
 
     /// <summary>
-    /// Acquires an exclusive lock for the current context, executes the provided action,
-    /// and then releases the lock. This method ensures that the specified action is executed
-    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// Acquires the lock for the current execution flow, executes the provided action, and then releases the lock.
     /// </summary>
     /// <param name="action">
     /// The <see cref="Action"/> to be executed while holding the lock. Must not be null.
@@ -213,7 +207,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// </exception>
     /// <remarks>
     /// The method ensures thread-safe execution of the provided action by acquiring either an exclusive
-    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// or a nested (reentrant) lock depending on the calling execution flow. For reentrant locks,
     /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
     /// </remarks>
     public void Acquire(Action action, CancellationToken cancellationToken = default)
@@ -258,6 +252,8 @@ public sealed partial class ReentrantAsyncLock : Disposable
 
             SyncRoot = previousSyncRoot;// Restore the previous synchronization root to maintain correct synchronization state and nested lock handling in the current flow.
 
+            // Do not release the underlying semaphore if ownership validation fails.
+            // The lock state is no longer considered reliable.
             CheckSynchronizationLock();
 
             if (Interlocked.Decrement(ref _currentCount) == 0)
@@ -275,9 +271,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     }
 
     /// <summary>
-    /// Acquires an exclusive lock for the current context, executes the provided action with the specified state,
-    /// and then releases the lock. This method ensures that the specified action is executed
-    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// Acquires the lock for the current execution flow, executes the provided action, and then releases the lock.
     /// </summary>
     /// <typeparam name="TState">
     /// The type of the state passed to the action.
@@ -306,7 +300,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// </exception>
     /// <remarks>
     /// The method ensures thread-safe execution of the provided action by acquiring either an exclusive
-    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// or a nested (reentrant) lock depending on the calling execution flow. For reentrant locks,
     /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
     /// </remarks>
     public void Acquire<TState>(Action<TState> action, TState state, CancellationToken cancellationToken = default)
@@ -341,8 +335,13 @@ public sealed partial class ReentrantAsyncLock : Disposable
         finally
         {
             PerformValidationAfterExecution(isReentrant, localSyncRoot);
+
             SyncRoot = previousSyncRoot;// Restore the previous synchronization root to maintain correct synchronization state and nested lock handling in the current flow.
+
+            // Do not release the underlying semaphore if ownership validation fails.
+            // The lock state is no longer considered reliable.
             CheckSynchronizationLock();
+
             if (Interlocked.Decrement(ref _currentCount) == 0)
             {
                 ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);
@@ -358,9 +357,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     }
 
     /// <summary>
-    /// Acquires an exclusive lock for the current context, executes the provided function,
-    /// and then releases the lock. This method ensures that the specified function is executed
-    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// Acquires the lock for the current execution flow, executes the provided action, and then releases the lock.
     /// </summary>
     /// <typeparam name="T">
     /// The type of the result produced by the function.
@@ -389,7 +386,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// </exception>
     /// <remarks>
     /// The method ensures thread-safe execution of the provided function by acquiring either an exclusive
-    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// or a nested (reentrant) lock depending on the calling execution flow. For reentrant locks,
     /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
     /// </remarks>
     public T Acquire<T>(Func<T> func, CancellationToken cancellationToken = default)
@@ -434,6 +431,8 @@ public sealed partial class ReentrantAsyncLock : Disposable
 
             SyncRoot = previousSyncRoot;// Restore the previous synchronization root to maintain correct synchronization state and nested lock handling in the current flow.
 
+            // Do not release the underlying semaphore if ownership validation fails.
+            // The lock state is no longer considered reliable.
             CheckSynchronizationLock();
 
             if (Interlocked.Decrement(ref _currentCount) == 0)
@@ -451,9 +450,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     }
 
     /// <summary>
-    /// Acquires an exclusive lock for the current context, executes the provided function with the specified state,
-    /// and then releases the lock. This method ensures that the specified function is executed
-    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// Acquires the lock for the current execution flow, executes the provided action, and then releases the lock.
     /// </summary>
     /// <typeparam name="TState">
     /// The type of the state passed to the function.
@@ -488,7 +485,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// </exception>
     /// <remarks>
     /// The method ensures thread-safe execution of the provided function by acquiring either an exclusive
-    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// or a nested (reentrant) lock depending on the calling execution flow. For reentrant locks,
     /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
     /// </remarks>
     public TResult Acquire<TState, TResult>(Func<TState, TResult> func, TState state, CancellationToken cancellationToken = default)
@@ -523,8 +520,13 @@ public sealed partial class ReentrantAsyncLock : Disposable
         finally
         {
             PerformValidationAfterExecution(isReentrant, localSyncRoot);
+
             SyncRoot = previousSyncRoot;// Restore the previous synchronization root to maintain correct synchronization state and nested lock handling in the current flow.
+
+            // Do not release the underlying semaphore if ownership validation fails.
+            // The lock state is no longer considered reliable.
             CheckSynchronizationLock();
+
             if (Interlocked.Decrement(ref _currentCount) == 0)
             {
                 ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);
@@ -540,9 +542,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     }
 
     /// <summary>
-    /// Asynchronously acquires an exclusive lock for the current context, executes the provided asynchronous function,
-    /// and then releases the lock. This method ensures that the specified function is executed
-    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// Asynchronously acquires the lock for the current execution flow, executes the provided asynchronous function, and then releases the lock.
     /// </summary>
     /// <param name="func">
     /// The <see cref="Func{ValueTask}"/> to be executed while holding the lock. Must not be null.
@@ -568,7 +568,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// </exception>
     /// <remarks>
     /// The method ensures thread-safe execution of the provided function by acquiring either an exclusive
-    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// or a nested (reentrant) lock depending on the calling execution flow. For reentrant locks,
     /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
     /// </remarks>
     public async ValueTask AcquireAsync(Func<ValueTask> func, CancellationToken cancellationToken = default)
@@ -611,8 +611,11 @@ public sealed partial class ReentrantAsyncLock : Disposable
         {
             PerformValidationAfterExecution(isReentrant, localSyncRoot);
 
-            SyncRoot = null;//Clear the synchronization root to allow garbage collection
+            // Clear this async flow's synchronization root. The caller's AsyncLocal value is preserved by its ExecutionContext.
+            SyncRoot = null;
 
+            // Do not release the underlying semaphore if ownership validation fails.
+            // The lock state is no longer considered reliable.
             CheckSynchronizationLock();
 
             if (Interlocked.Decrement(ref _currentCount) == 0)
@@ -630,9 +633,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     }
 
     /// <summary>
-    /// Asynchronously acquires an exclusive lock for the current context, executes the provided asynchronous function
-    /// with the specified state, and then releases the lock. This method ensures that the specified function is executed
-    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// Asynchronously acquires the lock for the current execution flow, executes the provided asynchronous function, and then releases the lock.
     /// </summary>
     /// <typeparam name="TState">
     /// The type of the state passed to the function.
@@ -664,7 +665,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// </exception>
     /// <remarks>
     /// The method ensures thread-safe execution of the provided function by acquiring either an exclusive
-    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// or a nested (reentrant) lock depending on the calling execution flow. For reentrant locks,
     /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
     /// </remarks>
     public async ValueTask AcquireAsync<TState>(Func<TState, ValueTask> func, TState state, CancellationToken cancellationToken = default)
@@ -699,8 +700,14 @@ public sealed partial class ReentrantAsyncLock : Disposable
         finally
         {
             PerformValidationAfterExecution(isReentrant, localSyncRoot);
-            SyncRoot = null;//Clear the synchronization root to allow garbage collection
+
+            // Clear this async flow's synchronization root. The caller's AsyncLocal value is preserved by its ExecutionContext.
+            SyncRoot = null;
+
+            // Do not release the underlying semaphore if ownership validation fails.
+            // The lock state is no longer considered reliable.
             CheckSynchronizationLock();
+
             if (Interlocked.Decrement(ref _currentCount) == 0)
             {
                 ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);
@@ -716,9 +723,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     }
 
     /// <summary>
-    /// Asynchronously acquires an exclusive lock for the current context, executes the provided asynchronous function
-    /// that returns a result, and then releases the lock. This method ensures that the specified function is executed
-    /// within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// Asynchronously acquires the lock for the current execution flow, executes the provided asynchronous function, and then releases the lock.
     /// </summary>
     /// <typeparam name="T">
     /// The type of the result produced by the function.
@@ -747,7 +752,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// </exception>
     /// <remarks>
     /// The method ensures thread-safe execution of the provided function by acquiring either an exclusive
-    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// or a nested (reentrant) lock depending on the calling execution flow. For reentrant locks,
     /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
     /// </remarks>
     public async ValueTask<T> AcquireAsync<T>(Func<ValueTask<T>> func, CancellationToken cancellationToken = default)
@@ -790,8 +795,11 @@ public sealed partial class ReentrantAsyncLock : Disposable
         {
             PerformValidationAfterExecution(isReentrant, localSyncRoot);
 
-            SyncRoot = null;//Clear the synchronization root to allow garbage collection
+            // Clear this async flow's synchronization root. The caller's AsyncLocal value is preserved by its ExecutionContext.
+            SyncRoot = null;
 
+            // Do not release the underlying semaphore if ownership validation fails.
+            // The lock state is no longer considered reliable.
             CheckSynchronizationLock();
 
             if (Interlocked.Decrement(ref _currentCount) == 0)
@@ -809,9 +817,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     }
 
     /// <summary>
-    /// Asynchronously acquires an exclusive lock for the current context, executes the provided asynchronous function
-    /// with the specified state and returns its result, and then releases the lock. This method ensures that the specified
-    /// function is executed within a mutually exclusive section, supporting reentrance within the same code flow.
+    /// Asynchronously acquires the lock for the current execution flow, executes the provided asynchronous function, and then releases the lock.
     /// </summary>
     /// <typeparam name="TState">
     /// The type of the state passed to the function.
@@ -846,7 +852,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     /// </exception>
     /// <remarks>
     /// The method ensures thread-safe execution of the provided function by acquiring either an exclusive
-    /// or a nested (reentrant) lock depending on the calling thread's context. For reentrant locks,
+    /// or a nested (reentrant) lock depending on the calling execution flow. For reentrant locks,
     /// the method uses a separate <see cref="SemaphoreSlim"/> instance to manage nested lock acquisition.
     /// </remarks>
     public async ValueTask<TResult> AcquireAsync<TState, TResult>(Func<TState, ValueTask<TResult>> func, TState state, CancellationToken cancellationToken = default)
@@ -881,8 +887,14 @@ public sealed partial class ReentrantAsyncLock : Disposable
         finally
         {
             PerformValidationAfterExecution(isReentrant, localSyncRoot);
-            SyncRoot = null;//Clear the synchronization root to allow garbage collection
+
+            // Clear this async flow's synchronization root. The caller's AsyncLocal value is preserved by its ExecutionContext.
+            SyncRoot = null;
+
+            // Do not release the underlying semaphore if ownership validation fails.
+            // The lock state is no longer considered reliable.
             CheckSynchronizationLock();
+
             if (Interlocked.Decrement(ref _currentCount) == 0)
             {
                 ValidateExclusiveStateFinally(isReentrant, previousSyncRoot);
@@ -907,7 +919,7 @@ public sealed partial class ReentrantAsyncLock : Disposable
     }
 
     /// <summary>
-    /// Gets a unique ID
+    /// Gets the next non-zero identifier for an execution flow.
     /// </summary>
     internal static int NewId()
     {

@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 
 namespace System;
 
+/// <summary>
+/// Provides extension methods for invoking and managing delegates.
+/// </summary>
 public static class DelegateExtensions
 {
     extension(Delegate callback)

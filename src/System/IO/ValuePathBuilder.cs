@@ -33,6 +33,9 @@ public ref partial struct ValuePathBuilder
     /// <summary>
     /// Gets or sets the directory separator character.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The value is neither <c>'/'</c> nor <c>'\'</c>.
+    /// </exception>
     public partial char DirectorySeparatorChar { readonly get; set; }
 
     /// <summary>

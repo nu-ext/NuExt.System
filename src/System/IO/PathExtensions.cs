@@ -14,14 +14,17 @@ public static class PathExtensions
         {
             get
             {
-                return Path.IsCaseSensitive ?
+                return Path.IsCaseSensitivePlatform ?
                     StringComparison.Ordinal :
                     StringComparison.OrdinalIgnoreCase;
             }
         }
 
-        /// <summary>Gets whether the system is case-sensitive.</summary>
-        public static bool IsCaseSensitive
+        /// <summary>
+        /// Gets whether path comparisons should use case-sensitive semantics based on the platform default.
+        /// This value does not detect case-sensitivity settings of a specific file system or directory.
+        /// </summary>
+        public static bool IsCaseSensitivePlatform
         {
             get
             {

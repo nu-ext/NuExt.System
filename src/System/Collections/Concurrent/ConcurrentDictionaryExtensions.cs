@@ -18,15 +18,12 @@ public static class ConcurrentDictionaryExtensions
         /// <see langword="true"/> if an existing value was replaced; otherwise <see langword="false"/> if a new entry was added.
         /// </returns>
         /// <remarks>
-        /// Provides atomic update-or-add semantics using lock-free compare-and-swap (CAS) operations of
+        /// Provides atomic update-or-add semantics using the thread-safe conditional operations of
         /// <see cref="ConcurrentDictionary{TKey,TValue}"/>.
         /// Unlike <see cref="ConcurrentDictionary{TKey,TValue}.AddOrUpdate(TKey, Func{TKey,TValue}, Func{TKey,TValue,TValue})"/>,
         /// this method does not invoke user delegates and returns the replaced value when an update occurs.
         /// </remarks>
-        public bool TryUpdateOrAdd(
-            TKey key,
-            TValue newValue,
-            out TValue? oldValue)
+        public bool TryUpdateOrAdd(TKey key, TValue newValue, out TValue? oldValue)
         {
             ArgumentNullException.ThrowIfNull(dict);
 
@@ -83,11 +80,7 @@ public static class ConcurrentDictionaryExtensions
         /// Compared to <see cref="ConcurrentDictionary{TKey,TValue}.AddOrUpdate(TKey, Func{TKey,TValue}, Func{TKey,TValue,TValue})"/>,
         /// this overload returns the replaced value and avoids delegate allocations on the add path.
         /// </remarks>
-        public bool TryUpdateOrAdd(
-            TKey key,
-            TValue addValue,
-            Func<TKey, TValue, TValue> updateFactory,
-            out TValue? oldValue)
+        public bool TryUpdateOrAdd(TKey key, TValue addValue, Func<TKey, TValue, TValue> updateFactory, out TValue? oldValue)
         {
             ArgumentNullException.ThrowIfNull(dict);
             ArgumentNullException.ThrowIfNull(updateFactory);
@@ -152,11 +145,7 @@ public static class ConcurrentDictionaryExtensions
         ///   <item><description>No indexer usage; relies only on <see cref="ConcurrentDictionary{TKey,TValue}.TryGetValue"/>, <see cref="ConcurrentDictionary{TKey,TValue}.TryUpdate"/>, and <see cref="ConcurrentDictionary{TKey,TValue}.TryAdd"/>.</description></item>
         /// </list>
         /// </remarks>
-        public bool TryUpdateOrAdd(
-            TKey key,
-            Func<TKey, TValue> addFactory,
-            Func<TKey, TValue, TValue> updateFactory,
-            out TValue? oldValue)
+        public bool TryUpdateOrAdd(TKey key, Func<TKey, TValue> addFactory, Func<TKey, TValue, TValue> updateFactory, out TValue? oldValue)
         {
             ArgumentNullException.ThrowIfNull(dict);
             ArgumentNullException.ThrowIfNull(addFactory);

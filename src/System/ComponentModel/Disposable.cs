@@ -258,9 +258,7 @@ public abstract class Disposable : PropertyChangeNotifier, IDisposableNotifiable
             Disposing = null;
             _state = States.Disposed;
             GC.SuppressFinalize(this);
-            OnPropertyChanged(EventArgsCache.IsDisposingPropertyChanged);
-            OnPropertyChanged(EventArgsCache.IsDisposedPropertyChanged);
-            ClearPropertyChangedHandlers();// Clear all event subscribers to prevent memory leaks
+            RaisePropertiesChangedAndClearHandlers(EventArgsCache.IsDisposingPropertyChanged, EventArgsCache.IsDisposedPropertyChanged);
         }
     }
 
@@ -318,8 +316,8 @@ public abstract class Disposable : PropertyChangeNotifier, IDisposableNotifiable
     public static IDisposable? DisposeAndNull<T>(ref T? disposable) where T : class, IDisposable
     {
         var original = disposable;
-        original?.Dispose();
         disposable = null;
+        original?.Dispose();
         return original;
     }
 
@@ -336,8 +334,8 @@ public abstract class Disposable : PropertyChangeNotifier, IDisposableNotifiable
         var original = disposable;
         if (original == null) return false;
 
-        original.Dispose();
         disposable = null;
+        original.Dispose();
         return true;
     }
 

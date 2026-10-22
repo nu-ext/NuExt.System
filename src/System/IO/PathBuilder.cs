@@ -34,6 +34,9 @@ public partial class PathBuilder : IDisposable
     /// <summary>
     /// Gets or sets the directory separator character.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The value is neither <c>'/'</c> nor <c>'\'</c>.
+    /// </exception>
     public partial char DirectorySeparatorChar { get; set; }
 
     /// <summary>

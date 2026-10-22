@@ -1,5 +1,8 @@
 ﻿namespace System;
 
+/// <summary>
+/// Provides extension methods for working with enumeration values.
+/// </summary>
 public static class EnumExtensions
 {
     extension(Enum)

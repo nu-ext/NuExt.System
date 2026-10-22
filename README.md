@@ -1,6 +1,6 @@
 # NuExt.System
 
-`NuExt.System` is a **lightweight, production-ready foundation** for everyday .NET development. It brings together high-quality utilities for **asynchrony**, **lifetime management**, **threading primitives**, **high‑performance spans/memory helpers**, **diagnostics**, and **collection helpers** — all with a strong focus on **performance**, **correctness**, and **developer ergonomics**. Use it to reduce boilerplate, standardize common patterns across projects, and keep code fast and clean across modern .NET and .NET Framework.
+`NuExt.System` is a **cross-platform application foundation for high-performance .NET desktop and hybrid frameworks**, providing cohesive primitives for **asynchrony**, **lifetime management**, **thread affinity**, **synchronization**, **observable state**, **cross-platform path processing**, and **high-performance memory operations** across modern .NET, .NET Standard, and .NET Framework without heavy dependencies.
 
 [![NuGet](https://img.shields.io/nuget/v/NuExt.System.svg)](https://www.nuget.org/packages/NuExt.System)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/nu-ext/NuExt.System)
@@ -8,235 +8,202 @@
 [![License](https://img.shields.io/github/license/nu-ext/NuExt.System?label=license)](https://github.com/nu-ext/NuExt.System/blob/main/LICENSE)
 [![Downloads](https://img.shields.io/nuget/dt/NuExt.System.svg)](https://www.nuget.org/packages/NuExt.System)
 
-## Features
+## Why NuExt.System?
 
-- **Asynchrony & lifetime**
-  - Async locks and wait handles: `AsyncLock`, `ReentrantAsyncLock`, `AsyncWaitHandle`
-  - Disposable tooling: `Disposable`, `AggregateDisposable`, `AsyncDisposable`, `AggregateAsyncDisposable`, `AsyncLifetime`
-- **Threading & synchronization**
-  - Reentrant async lock (context‑aware), synchronization‑context helpers, thread‑affine flows
-- **High‑performance spans & memory**
-  - **Backports/polyfills for `Span` / `MemoryExtensions` APIs** (see below)
-  - `ValueStringBuilder` / `ValueListBuilder<T>` for zero‑allocation building
-- **Collections & equality**
-  - `ObservableDictionary<TKey, TValue>`, `ReferenceEqualityComparer` *(polyfill)*, `ArrayEqualityComparer<T>`, and **many useful extension helpers**
-- **I/O & paths (cross‑platform)**
-  - `PathBuilder` (class, `IDisposable`) and `ValuePathBuilder` (ref struct) — platform‑independent path builders
-  - `PathUtilities` — static helpers for common path operations
-- **Diagnostics & utilities**
-  - `ProcessMonitor`, `PerformanceMonitor`, `EnumHelper<T>`, `TypeExtensions`, etc.
+- **Application-oriented** — infrastructure for desktop and hybrid application frameworks, not just isolated helpers
+- **Framework-agnostic** — works across WPF, WinForms, Avalonia, hybrid UI, services, and libraries
+- **Cross-platform** — platform-independent primitives and explicit Windows and Unix path semantics
+- **Thread-aware** — thread affinity, synchronization contexts, and sync/async coordination
+- **Lifetime-driven** — deterministic cleanup for disposables, asynchronous resources, subscriptions, and services
+- **High-performance** — span-based APIs, pooled buffers, and allocation-conscious builders
+- **Consistent across runtimes** — a stable API surface across modern .NET, .NET Standard, and .NET Framework
+- **Dependency-light** — no required hosting model, container, UI framework, or heavy external infrastructure
+
+## Designed for
+
+NuExt.System is intended for application and framework authors who need:
+
+- deterministic synchronous and asynchronous lifetime management;
+- safe interaction with thread-affine objects and synchronization contexts;
+- asynchronous events with ordered invocation, cancellation, and exception aggregation;
+- observable collections and property notifications for application state;
+- synchronous and asynchronous coordination primitives;
+- Windows and Unix path processing independent of the host platform;
+- compatibility across modern .NET and legacy .NET Framework targets.
+
+## Core infrastructure
+
+### Application object foundations
+
+- `Disposable` and `AsyncDisposable` provide consistent, thread-safe base implementations for deterministic synchronous and asynchronous cleanup.
+- `PropertyChangeNotifier` provides synchronization-context-aware property notifications and reusable support for observable, thread-affine application state.
+
+### Lifetime management
+
+- `Lifetime` and `AsyncLifetime` coordinate cleanup actions, subscriptions, disposables, and asynchronous resources as a single lifetime scope.
+- Cleanup actions execute in reverse registration order, with asynchronous cleanup and exception aggregation supported where applicable.
+
+### Threading and synchronization
+
+- `AsyncLock` and `ReentrantAsyncLock` provide synchronous and asynchronous coordination, cancellation, timeout handling, and explicit reentrancy semantics.
+- `AsyncWaitHandle` integrates wait handles with task-based asynchronous code.
+- `AsyncLazy<T>` provides thread-safe, one-time asynchronous initialization with a cached, directly awaitable task.
+- `LockPool` associates a stable lock with an object identity without relying on equality or hash codes, while allowing the lock lifetime to follow the key through weak references.
+- `SynchronizationContextHelper`, `SynchronizationContextExtensions`, and `ThreadAffineSynchronizationContext` provide thread-affinity checks, context marshaling, synchronous and asynchronous invocation, result propagation, and exception handling.
+- `IDispatcherObject`, `ISynchronizeInvoker`, and related contracts make thread-affine application infrastructure reusable across UI frameworks and hosting models.
+
+### Deterministic asynchronous events
+
+NuExt.System treats an asynchronous event as an **ordered asynchronous operation**, not as an implicit parallel broadcast, making execution order, cancellation, and exception handling predictable.
+
+```csharp
+public delegate ValueTask AsyncEventHandler(
+    object? sender,
+    EventArgs e,
+    CancellationToken cancellationToken);
+
+public delegate ValueTask AsyncEventHandler<TEventArgs>(
+    object? sender,
+    TEventArgs e,
+    CancellationToken cancellationToken);
+```
+
+The design follows several principles:
+
+- **Cancellation is part of the operation contract** — `CancellationToken` is a dedicated argument rather than application data embedded into a custom `EventArgs` type. Handlers can inspect it directly and propagate it to downstream asynchronous APIs.
+- **Synchronous completion remains inexpensive** — `ValueTask` avoids requiring every handler to allocate a `Task` when the work completes synchronously.
+- **Invocation order is deterministic** — handlers are awaited sequentially in subscription order. No hidden parallelism is introduced through `Task.WhenAll`, so handlers can safely depend on ordering and observe preceding changes.
+- **Exception behavior is explicit** — invocation can stop on the first exception or continue through the remaining handlers and throw an `AggregateException` afterward.
+- **Context flow is controlled by the caller** — invocation overloads make continuation on the captured synchronization context an explicit choice.
+
+Sequential invocation is the default because event handlers commonly interact with shared application state, thread-affine objects, and ordered lifecycle transitions. Applications that require parallel fan-out can still implement it explicitly at the point where independent execution is known to be safe.
+
+### Observable collections
+
+- `ObservableDictionary<TKey, TValue>` is a full observable dictionary rather than a thin wrapper around `Dictionary<TKey, TValue>`. It implements dictionary and list-oriented contracts, preserves stable insertion order, provides index-aware collection notifications for individual changes, uses reset notifications for batch operations, and keeps `Count` and indexer property notifications consistent with each mutation.
+- The dictionary can participate directly in data-binding pipelines built around `INotifyCollectionChanged` and `INotifyPropertyChanged`, including WPF, Avalonia, WinUI, .NET MAUI, and other UI or application frameworks that consume these standard interfaces.
+- `OrderedObservableCollection<T>` maintains application-defined item ordering across inserts and moves while allowing explicit normalization when complete renumbering is required.
+- `ArrayEqualityComparer<T>` provides structural array equality, while `ReferenceEqualityComparer` backports BCL reference-identity comparison to older target frameworks.
+
+### Performance-oriented primitives
+
+- `ValueListBuilder<T>` uses caller-provided span storage first and grows through `ArrayPool<T>` only when necessary, making it suitable for short-lived internal lists without unconditional heap allocation.
+- `ValueStringBuilder` follows the same model for text construction: stack-backed or caller-provided storage for the common case, pooled growth for larger values, and a single resulting string allocation.
+- `ValuePathBuilder` applies the same allocation-conscious design to host-independent path construction and normalization.
+- Span-based compatibility APIs preserve newer BCL-style operations across older targets while using optimized implementation paths where the runtime permits them.
+
+### Host-independent path semantics
+
+`PathBuilder`, `ValuePathBuilder`, and `PathUtilities` can process Windows and Unix paths independently of the host operating system. Path rules are selected explicitly through `DirectorySeparatorChar` or `isUnixLike`, rather than inherited implicitly from the host.
+
+This is useful for build tools, archives, deployment systems, remote file systems, IDEs, and services that exchange paths between Windows and Unix environments. It avoids treating paths as unstructured strings or relying on separator replacement, which is insufficient for drive-relative, UNC, device, rooted, and relative path forms.
 
 ### Span / MemoryExtensions Polyfills
 
-This package includes **polyfills (API backports)** for selected `Span` / `MemoryExtensions`‑style APIs from newer .NET versions. On modern runtimes, it transparently uses the inbox implementations; on older runtimes, it provides compatible behavior with the same semantics.
+This package includes **polyfills (API backports)** for selected `Span` / `MemoryExtensions`-style APIs from newer .NET versions. On modern runtimes, it transparently uses the inbox implementations; on older runtimes, it provides compatible behavior with the same semantics.
 
 **What you get (highlights)**
+
 - Search & comparison: `Contains`, `SequenceEqual` (+ `IEqualityComparer<T>`)
 - Indexing: `IndexOf`, `LastIndexOf` (element / sequence)
-- Set‑based search: `IndexOfAny`, `LastIndexOfAny`, `IndexOfAnyExcept`, `LastIndexOfAnyExcept`
-- Range‑based: `IndexOfAnyInRange`, `IndexOfAnyExceptInRange`, `LastIndexOfAnyInRange`, `LastIndexOfAnyExceptInRange`
-- Utilities: `StartsWith`, `EndsWith`, `Replace` (in‑place / copy), `Count`, `CountAny`
+- Set-based search: `IndexOfAny`, `LastIndexOfAny`, `IndexOfAnyExcept`, `LastIndexOfAnyExcept`
+- Range-based: `IndexOfAnyInRange`, `IndexOfAnyExceptInRange`, `LastIndexOfAnyInRange`, `LastIndexOfAnyExceptInRange`
+- Utilities: `StartsWith`, `EndsWith`, `Replace` (in-place / copy), `Count`, `CountAny`
 
 **Notes**
-- Allocation‑free, performance‑oriented; value types use bitwise fast paths where applicable.
+
+- Allocation-free, performance-oriented; value types use bitwise fast paths where applicable.
 - Semantics mirror the .NET runtime APIs; custom comparers are honored when provided.
 
-## Why NuExt.System?
+### Additional utilities
 
-- **Practical** — battle‑tested building blocks you use every day
-- **Fast** — zero‑alloc paths, tight loops, careful branching profiles
-- **Consistent** — same behavior across modern .NET and .NET Framework
-- **Focused** — no heavy external dependencies or configuration
+NuExt.System also includes focused helpers for delegates and asynchronous multicast invocation, enum metadata and formatting, exception throwing and validation, reflection, diagnostics and process monitoring, hexadecimal conversion, collection operations, string compatibility APIs, runtime attributes, and selected BCL polyfills.
 
-### Compatibility
+## Compatibility
 
-- **.NET Standard 2.0+, .NET 8/9/10 and .NET Framework 4.6.2+**
-- **Works across desktop, web, and services** (Console, ASP.NET Core, Avalonia, WinUI, WPF, WinForms)
-
-## Commonly Used Types
-
-- **Asynchrony & lifetime**
-  - `System.Threading.AsyncLock`, `System.Threading.ReentrantAsyncLock`, `System.Threading.AsyncWaitHandle`
-  - `System.ComponentModel.Disposable`, `AggregateDisposable`, `AsyncDisposable`, `AggregateAsyncDisposable`, `AsyncLifetime`
-- **Collections & equality**
-  - `System.Collections.ObjectModel.ObservableDictionary<TKey, TValue>`
-  - `System.Collections.Generic.ValueListBuilder<T>`
-  - `System.Collections.Generic.ReferenceEqualityComparer` *(polyfill)*
-  - `System.Collections.Generic.ArrayEqualityComparer<T>`
-  - **Various extension helpers** (collections, delegates, enums, strings, exceptions)
-- **Strings, spans, and memory**
-  - `System.Text.ValueStringBuilder`
-  - `System.CompatMemoryExtensions` *(polyfills/backports)*
-- **I/O & paths (cross‑platform)**
-  - `System.IO.PathBuilder` *(class, `IDisposable` — mutable path builder)*
-  - `System.IO.ValuePathBuilder` *(ref struct — high‑performance mutable path builder)*
-  - `System.IO.PathUtilities` *(static common path operations)*
-- **Diagnostics & helpers**
-  - `System.Diagnostics.ProcessMonitor`, `PerformanceMonitor`
-  - `System.EnumHelper<T>`, `System.FormatUtils`, `System.HexConverter`
+- **.NET Standard 2.0+, .NET 8/9/10, and .NET Framework 4.6.2+**
+- Designed primarily for **desktop and hybrid application infrastructure**
+- Usable with **WPF, WinForms, Avalonia, WinUI, Blazor Hybrid, console applications, services, and shared libraries**
+- Platform-independent APIs support Windows and Unix path semantics on any host OS
 
 ## Quick Examples
 
-### 1) Reentrant async lock (with ExecutionContext best practices)
-```csharp
-var asyncLock = new System.Threading.ReentrantAsyncLock();
-var cts = new CancellationTokenSource();
+### 1) Reentrant async lock
 
-// Synchronous section
+```csharp
+var asyncLock = new ReentrantAsyncLock();
+
 asyncLock.Acquire(() =>
 {
-    // do work safely, reentry allowed on the same flow
+    // Synchronous work with reentry allowed on the same flow.
 });
 
-// Asynchronous section
 await asyncLock.AcquireAsync(async () =>
 {
     await DoAsyncWork();
 });
-
-// Avoid unintentionally flowing AsyncLocal into CT callbacks:
-using (ExecutionContext.SuppressFlow())
-{
-    cts.Token.Register(() => asyncLock.Acquire(() =>
-    {
-        // safe callback body
-    }));
-}
 ```
 
-### 2) Async lifetime + aggregated disposal
+### 2) Async lifetime and aggregated disposal
 
 ```csharp
-var lifetime = new System.AsyncLifetime() { ContinueOnCapturedContext = true };
+var lifetime = new AsyncLifetime { ContinueOnCapturedContext = true };
 lifetime.AddDisposable(new FileStream(path, FileMode.Open));
-lifetime.AddAsync(async () => await FlushBuffersAsync());
+lifetime.AddAsync(FlushBuffersAsync);
 
-await lifetime.DisposeAsync(); // disposes in the right order, async‑aware
+await lifetime.DisposeAsync(); // Executes cleanup actions in reverse order
 ```
 
-### 3) Zero‑alloc string building with `ValueStringBuilder`
+### 3) Allocation-conscious string building with `ValueStringBuilder`
 
 ```csharp
 Span<char> initial = stackalloc char[128];
-var sb = new System.Text.ValueStringBuilder(initial);
+var sb = new ValueStringBuilder(initial);
 
 sb.Append("User: ");
 sb.Append(userName);
 sb.Append(", Items: ");
 sb.Append(itemCount);
 
-string result = sb.ToString(); // minimal allocations
+string result = sb.ToString(); // Allocates the resulting string
 ```
 
-### 4) `ValueListBuilder<T>` and `ValueTask.WhenAll`
+### 4) Host-independent path processing
 
 ```csharp
-public class Example
+using var windowsPath = new PathBuilder(@"C:\repo\src\..\artifacts")
 {
-    public static async Task Main()
-    {
-        int failed = 0;
-        String[] urls = [ "www.adatum.com", "www.cohovineyard.com",
-                        "www.cohowinery.com", "www.northwindtraders.com",
-                        "www.contoso.com" ];
-        var tasks = new ValueListBuilder<ValueTask>(urls.Length);
+    DirectorySeparatorChar = '\\'
+};
 
-        foreach (var value in urls)
-        {
-            var url = value;
-            tasks.Append(new ValueTask(Task.Run(() =>
-            {
-                var png = new Ping();
-                try
-                {
-                    var reply = png.Send(url);
-                    if (reply.Status != IPStatus.Success)
-                    {
-                        Interlocked.Increment(ref failed);
-                        throw new TimeoutException("Unable to reach " + url + ".");
-                    }
-                }
-                catch (PingException)
-                {
-                    Interlocked.Increment(ref failed);
-                    throw;
-                }
-            })));
-        }
-        ValueTask t = ValueTask.WhenAll(tasks.ToArray());
-        try
-        {
-            await t;
-        }
-        catch { }
+string normalizedWindowsPath = windowsPath.GetFullPath().ToString();
+// C:\repo\artifacts, regardless of the host operating system
 
-        if (t.IsCompletedSuccessfully)
-            Console.WriteLine("All ping attempts succeeded.");
-        else if (t.IsFaulted)
-            Console.WriteLine("{0} ping attempts failed", failed);
-    }
-}
+using var unixPath = new PathBuilder("/srv/app/../data")
+{
+    DirectorySeparatorChar = '/'
+};
+
+string normalizedUnixPath = unixPath.GetFullPath().ToString();
+// /srv/data, regardless of the host operating system
 ```
 
-### 5) `ValueListBuilder<T>` and `ValueTask.WhenAll<TResult>`
+### 5) Ordered asynchronous events
 
 ```csharp
-public class Example
-{
-    public static async Task Main()
-    {
-        int failed = 0;
-        String[] urls = [ "www.adatum.com", "www.cohovineyard.com",
-                        "www.cohowinery.com", "www.northwindtraders.com",
-                        "www.contoso.com" ];
-        var tasks = new ValueListBuilder<ValueTask<PingReply>>(urls.Length);
+AsyncEventHandler? changed = null;
 
-        foreach (var value in urls)
-        {
-            var url = value;
-            tasks.Append(new ValueTask<PingReply>(Task.Run(() =>
-            {
-                var png = new Ping();
-                try
-                {
-                    var reply = png.Send(url);
-                    if (reply.Status != IPStatus.Success)
-                    {
-                        Interlocked.Increment(ref failed);
-                        throw new TimeoutException("Unable to reach " + url + ".");
-                    }
-                    return reply;
-                }
-                catch (PingException)
-                {
-                    Interlocked.Increment(ref failed);
-                    throw;
-                }
-            })));
-        }
-        try
-        {
-            PingReply[] replies = await ValueTask.WhenAll(tasks.ToArray());
-            Console.WriteLine("{0} ping attempts succeeded:", replies.Length);
-            for (int i = 0; i < replies.Length; i++)
-            {
-                var reply = replies[i];
-                Console.WriteLine($"Reply from {reply.Address}: bytes={reply.Buffer.Length} time={reply.RoundtripTime}ms TTL={reply.Options?.Ttl} [{urls[i]}]");
-            }
-        }
-        catch (AggregateException)
-        {
-            Console.WriteLine("{0} ping attempts failed", failed);
-        }
-    }
-}
+changed += FirstHandlerAsync;
+changed += SecondHandlerAsync;
+
+await changed.InvokeAsync(this, EventArgs.Empty, cancellationToken);
 ```
 
 ## Installation
 
 Via [NuGet](https://www.nuget.org/):
 
-```sh
+```shell
 dotnet add package NuExt.System
 ```
 

@@ -9,17 +9,17 @@ namespace System.Threading;
 public interface ISynchronizeInvoker : IDispatcherObject
 {
     /// <summary>
-    /// Executes the specified delegate asynchronously on the appropriate thread or context.
+    /// Queues the specified delegate for asynchronous execution on the associated thread or context.
     /// </summary>
-    /// <param name="method">A delegate to a method to invoke.</param>
-    /// <param name="args">An array of objects to pass as arguments to the delegate, or <see langword="null"/>.</param>
-    /// <returns>A <see cref="Task{Object}"/> that represents the asynchronous operation. 
-    /// The task result is the return value from the delegate being invoked, or <see langword="null"/> if the delegate has no return value.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when the <paramref name="method"/> parameter is null.</exception>
-    /// <remarks>
-    /// This method returns immediately and does not wait for the asynchronous operation to complete.
-    /// The delegate is always executed asynchronously, even if called from the correct thread.
-    /// </remarks>
+    /// <param name="method">The delegate to invoke.</param>
+    /// <param name="args">
+    /// The arguments to pass to <paramref name="method"/>, or an empty array if the delegate has no parameters.
+    /// </param>
+    /// <returns>
+    /// A task that completes when the delegate finishes. The task result is the delegate's return value,
+    /// or <see langword="null"/> if the delegate does not return a value.
+    /// </returns>
+    /// <exception cref="ArgumentNullException"><paramref name="method"/> is <see langword="null"/>.</exception>
     public Task<object?> BeginInvoke(Delegate method, params object?[] args);
 
     /// <summary>

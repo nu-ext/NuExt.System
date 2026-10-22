@@ -289,7 +289,10 @@ public sealed class AggregateAsyncDisposable : AsyncDisposable
                 exceptions.Add(ex);
             }
         }
+
+        Array.Clear(snapshot, 0, count);
         pool.Return(snapshot);
+
         if (exceptions is not null)
         {
             throw new AggregateException(exceptions);

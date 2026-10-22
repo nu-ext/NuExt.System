@@ -127,7 +127,7 @@ public static partial class PathUtilities
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsRoot(ReadOnlySpan<char> path, bool isUnixLike)
     {
-        return path.Length == GetRootLength(path, isUnixLike);
+        return !path.IsEmpty && path.Length == GetRootLength(path, isUnixLike);
     }
 
     /// <summary>
@@ -221,8 +221,14 @@ public static partial class PathUtilities
     }
 
     /// <summary>
-    /// Expands the given path to a fully qualified path.
+    /// Normalizes the specified path using the selected platform semantics.
     /// </summary>
+    /// <param name="path">The path to normalize.</param>
+    /// <param name="isUnixLike">
+    /// <see langword="true"/> to use Unix path semantics;
+    /// otherwise, <see langword="false"/> to use Windows path semantics.
+    /// </param>
+    /// <returns>The normalized path.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ReadOnlySpan<char> GetFullPath(ReadOnlySpan<char> path, bool isUnixLike)
     {
@@ -378,15 +384,28 @@ public static partial class PathUtilities
     }
 
     /// <summary>
-    /// Create a relative path from one path to another. Paths will be resolved before calculating the difference.
-    /// Default path comparison for the active platform will be used (OrdinalIgnoreCase for Windows or Mac, Ordinal for Unix).
+    /// Creates a relative path from one path to another after normalizing both paths.
+    /// Path comparison uses ordinal semantics for Unix paths and ordinal case-insensitive semantics for Windows paths.
     /// </summary>
-    /// <param name="relativeTo">The source path the output should be relative to. This path is always considered to be a directory.</param>
+    /// <param name="relativeTo">
+    /// The source path the output should be relative to. This path is always considered to be a directory.
+    /// </param>
     /// <param name="path">The destination path.</param>
-    /// <param name="isUnixLike"></param>
-    /// <param name="basePath">The beginning of a fully qualified path or empty.</param>
-    /// <returns>The relative path or <paramref name="path"/> if the paths don't share the same root.</returns>
-    /// <exception cref="ArgumentNullException">Thrown if <paramref name="relativeTo"/> or <paramref name="path"/> is <see langword="null"/> or an empty string.</exception>
+    /// <param name="isUnixLike">
+    /// <see langword="true"/> to use Unix path semantics;
+    /// otherwise, <see langword="false"/> to use Windows path semantics.
+    /// </param>
+    /// <param name="basePath">
+    /// The fully qualified base path used to resolve relative paths, or an empty span to normalize
+    /// <paramref name="relativeTo"/> and <paramref name="path"/> without resolving them against a base path.
+    /// </param>
+    /// <returns>
+    /// The relative path, or <paramref name="path"/> after normalization if the paths do not share the same root.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="relativeTo"/> or <paramref name="path"/> is empty, or
+    /// <paramref name="basePath"/> is not fully qualified.
+    /// </exception>
     public static ReadOnlySpan<char> GetRelativePath(scoped ReadOnlySpan<char> relativeTo, ReadOnlySpan<char> path, bool isUnixLike,
         ReadOnlySpan<char> basePath = default)
     {
@@ -407,7 +426,7 @@ public static partial class PathUtilities
         }
 
         // Need to check if the roots are different- if they are we need to return the "to" path.
-        if (!AreRootsEqual(relativeTo, path, isUnixLike))//TODO support mac case sensitivity
+        if (!AreRootsEqual(relativeTo, path, isUnixLike))
             return path;
 
         int commonLength = GetCommonPathLength(relativeTo, path, isUnixLike);
@@ -636,9 +655,13 @@ public static partial class PathUtilities
     /// </summary>
     private static ReadOnlySpan<char> TrimTrailingSeparators(ReadOnlySpan<char> path, bool isUnixLike)
     {
+        int rootLength = GetRootLength(path, isUnixLike);
         int end = path.Length;
-        while (end > 0 && IsDirectorySeparator(path[end - 1], isUnixLike))
+
+        while (end > rootLength && IsDirectorySeparator(path[end - 1], isUnixLike))
+        {
             end--;
+        }
 
         return path.Slice(0, end);
     }

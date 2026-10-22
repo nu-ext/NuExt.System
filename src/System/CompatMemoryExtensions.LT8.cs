@@ -197,6 +197,12 @@ partial class CompatMemoryExtensions
             ThrowNullLowHighInclusive(lowInclusive, highInclusive);
         }
 
+        // When highInclusive < lowInclusive, the range is invalid and no values can match.
+        if (lowInclusive.CompareTo(highInclusive) > 0)
+        {
+            return -1;
+        }
+
         return SpanHelpers.IndexOfAnyInRange(ref MemoryMarshal.GetReference(span), lowInclusive, highInclusive, span.Length);
     }
 
@@ -221,6 +227,12 @@ partial class CompatMemoryExtensions
         if (lowInclusive is null || highInclusive is null)
         {
             ThrowNullLowHighInclusive(lowInclusive, highInclusive);
+        }
+
+        // When highInclusive < lowInclusive, the range is invalid and all values are outside it.
+        if (lowInclusive.CompareTo(highInclusive) > 0)
+        {
+            return span.IsEmpty ? -1 : 0;
         }
 
         return SpanHelpers.IndexOfAnyExceptInRange(ref MemoryMarshal.GetReference(span), lowInclusive, highInclusive, span.Length);
@@ -249,6 +261,12 @@ partial class CompatMemoryExtensions
             ThrowNullLowHighInclusive(lowInclusive, highInclusive);
         }
 
+        // When highInclusive < lowInclusive, the range is invalid and no values can match.
+        if (lowInclusive.CompareTo(highInclusive) > 0)
+        {
+            return -1;
+        }
+
         return SpanHelpers.LastIndexOfAnyInRange(ref MemoryMarshal.GetReference(span), lowInclusive, highInclusive, span.Length);
     }
 
@@ -273,6 +291,12 @@ partial class CompatMemoryExtensions
         if (lowInclusive is null || highInclusive is null)
         {
             ThrowNullLowHighInclusive(lowInclusive, highInclusive);
+        }
+
+        // When highInclusive < lowInclusive, the range is invalid and all values are outside it.
+        if (lowInclusive.CompareTo(highInclusive) > 0)
+        {
+            return span.Length - 1;
         }
 
         return SpanHelpers.LastIndexOfAnyExceptInRange(ref MemoryMarshal.GetReference(span), lowInclusive, highInclusive, span.Length);

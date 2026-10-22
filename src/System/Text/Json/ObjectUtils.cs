@@ -19,6 +19,9 @@ public static class ObjectUtils
     /// <param name="json">The JSON string to deserialize.</param>
     /// <param name="getObjectType">A function to get the object type by property name.</param>
     /// <param name="setValue">A function to set the value of the object by property name.</param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="getObjectType"/> or <paramref name="setValue"/> is <see langword="null"/>.
+    /// </exception>
     public static void DeserializeObject(string json, Func<string, Type?> getObjectType, Func<string, object?, bool> setValue)
     {
         DeserializeObject(json, getObjectType, setValue, null, out _);
@@ -31,6 +34,9 @@ public static class ObjectUtils
     /// <param name="getObjectType">A function to get the object type by property name.</param>
     /// <param name="setValue">A function to set the value of the object by property name.</param>
     /// <param name="options">Options for JSON deserialization.</param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="getObjectType"/> or <paramref name="setValue"/> is <see langword="null"/>.
+    /// </exception>
     public static void DeserializeObject(string json, Func<string, Type?> getObjectType, Func<string, object?, bool> setValue, JsonSerializerOptions? options)
     {
         DeserializeObject(json, getObjectType, setValue, options, out _);
@@ -45,15 +51,19 @@ public static class ObjectUtils
     /// <param name="setValue">A function to set the value of the object by property name.</param>
     /// <param name="options">Options for JSON deserialization.</param>
     /// <param name="additionalData">A dictionary to store any additional data that does not match known types.</param>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="getObjectType"/> or <paramref name="setValue"/> is <see langword="null"/>.
+    /// </exception>
     public static void DeserializeObject(string json, Func<string, Type?> getObjectType, Func<string, object?, bool> setValue, JsonSerializerOptions? options, out Dictionary<string, JsonElement>? additionalData)
     {
+        ArgumentNullException.ThrowIfNull(getObjectType);
+        ArgumentNullException.ThrowIfNull(setValue);
+
         additionalData = null;
         if (string.IsNullOrEmpty(json))
         {
             return;
         }
-        ArgumentNullException.ThrowIfNull(getObjectType);
-        ArgumentNullException.ThrowIfNull(setValue);
 
         //var json = JsonSerializer.Deserialize<JsonDocument>(json);
         try
@@ -76,18 +86,21 @@ public static class ObjectUtils
                     var obj = value.Deserialize(type, options);
                     if (!setValue(name, obj))
                     {
-                        Debug.Assert(false, $"Can't set property: {name}");
+                        Trace.WriteLine($"Can't set property: {name}");
+                        Debug.Fail($"Can't set property: {name}");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.Assert(false, ex.Message);
+                    Trace.WriteLine($"Failed to deserialize property '{name}': {ex}");
+                    Debug.Fail($"Failed to deserialize property '{name}': {ex.Message}");
                 }
             }
         }
         catch (Exception ex)
         {
-            Debug.Assert(false, ex.Message);
+            Trace.WriteLine($"Failed to deserialize JSON object: {ex}");
+            Debug.Fail($"Failed to deserialize JSON object: {ex.Message}");
         }
     }
 

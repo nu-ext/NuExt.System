@@ -26,7 +26,8 @@ partial class PathBuilder
 
     public partial PathBuilder(int initialCapacity)
     {
-        Throw.ArgumentOutOfRangeExceptionIf(initialCapacity < 0, nameof(initialCapacity), SR.ArgumentOutOfRange_NeedNonNegNum);
+        ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
+
         _chars = initialCapacity == 0 ? s_emptyArray : new char[initialCapacity];
         _pos = 0;
     }
@@ -69,7 +70,11 @@ partial class PathBuilder
     {
         get => _directorySeparatorChar ?? Path.DirectorySeparatorChar;
         set 
-        { 
+        {
+            if (value != '/' && value != '\\')
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
             _directorySeparatorChar = value;
             _isUnixLikePlatform = PathUtilities.IsUnixLikePlatform(value);
         }
@@ -84,6 +89,10 @@ partial class PathBuilder
         {
             Debug.Assert(value >= 0);
             Debug.Assert(value <= _chars.Length);
+            if ((uint)value > (uint)_chars.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
             _pos = value;
         }
     }
@@ -93,6 +102,10 @@ partial class PathBuilder
         get
         {
             Debug.Assert(index < _pos);
+            if ((uint)index >= (uint)_pos)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index));
+            }
             return ref _chars[index];
         }
     }
@@ -199,11 +212,11 @@ partial class PathBuilder
 
     public partial void EnsureCapacity(int capacity)
     {
-        // This is not expected to be called this with negative capacity
+        // Negative capacity is always invalid, even when the current buffer is empty.
         Debug.Assert(capacity >= 0);
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
 
-        // If the caller has a bug and calls this with negative capacity, make sure to call Grow to throw an exception.
-        if ((uint)capacity > (uint)_chars.Length)
+        if (capacity > _chars.Length)
         {
             Grow(capacity - _pos);
         }
@@ -300,27 +313,24 @@ partial class PathBuilder
 
     public partial ReadOnlySpan<char> AsSpan(int start, int length)
     {
-        return _chars.AsSpan().Slice(start, length);
+        if ((uint)start > (uint)_pos || (uint)length > (uint)(_pos - start))
+        {
+            throw new ArgumentOutOfRangeException();
+        }
+
+        return _chars.AsSpan(start, length);
     }
 
     public partial bool TryCopyTo(scoped Span<char> destination, out int charsWritten)
     {
-        if (_chars.AsSpan()
-#if NETFRAMEWORK || NETSTANDARD2_0
-            .Slice(0, _pos)
-#else
-            [.._pos]
-#endif
-            .TryCopyTo(destination))
-        {
-            charsWritten = _pos;
-            return true;
-        }
-        else
+        if (!AsSpan().TryCopyTo(destination))
         {
             charsWritten = 0;
             return false;
         }
+
+        charsWritten = _pos;
+        return true;
     }
 
     #endregion
@@ -545,7 +555,7 @@ partial class PathBuilder
 
     public partial bool IsRoot()
     {
-        return _pos == PathUtilities.GetRootLength(AsSpan(), IsUnixLikePlatform);
+        return PathUtilities.IsRoot(AsSpan(), IsUnixLikePlatform);
     }
 
     public partial bool NormalizeDirectorySeparators()

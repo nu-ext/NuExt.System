@@ -258,7 +258,7 @@ public abstract class AsyncDisposable : PropertyChangeNotifier, IAsyncDisposable
             if (Disposing is { } disposing)
             {
                 await disposing.
-                    InvokeAsync(this, EventArgs.Empty, continueOnCapturedContext: ContinueOnCapturedContext)
+                    InvokeAsync(this, EventArgs.Empty, continueOnCapturedContext: ContinueOnCapturedContext, continueOnException: false, CancellationToken.None)
                     .ConfigureAwait(continueOnCapturedContext: ContinueOnCapturedContext);
             }
             //https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/implementing-disposeasync
@@ -284,9 +284,7 @@ public abstract class AsyncDisposable : PropertyChangeNotifier, IAsyncDisposable
             Disposing = null;
             _state = States.Disposed;
             GC.SuppressFinalize(this);
-            OnPropertyChanged(EventArgsCache.IsDisposingPropertyChanged);
-            OnPropertyChanged(EventArgsCache.IsDisposedPropertyChanged);
-            ClearPropertyChangedHandlers();// Clear all event subscribers to prevent memory leaks
+            RaisePropertiesChangedAndClearHandlers(EventArgsCache.IsDisposingPropertyChanged, EventArgsCache.IsDisposedPropertyChanged);
         }
     }
 

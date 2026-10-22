@@ -13,6 +13,12 @@ internal static class TypeInfoCache<T>
 
     private static bool GetIsReferenceOrContainsReferences(Type type)
     {
+        // Pointer types do not contain managed references.
+        if (type.IsPointer)
+        {
+            return false;
+        }
+
         // Reference types (classes, interfaces, arrays, strings, delegates)
         if (!type.IsValueType)
         {

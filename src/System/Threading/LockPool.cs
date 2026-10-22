@@ -8,9 +8,10 @@ namespace System.Threading;
 public static class LockPool
 {
     /// <summary>
-    /// Gets the <see cref="Lock"/> instance uniquely associated with the specified key object.
-    /// The same lock instance is returned for the same key across all threads and calls.
-    /// The lifetime of the returned lock is automatically managed and tied to the lifetime of the key object.
+    /// Gets the <see cref="Lock"/> instance uniquely associated with the specified key object instance.
+    /// The same lock instance is returned for the same key object instance across all threads and calls.
+    /// Key equality and hash codes are not used. The lifetime of the returned lock is automatically
+    /// managed and tied to the lifetime of the key object.
     /// </summary>
     /// <typeparam name="T">The type of the key object.</typeparam>
     /// <param name="key">The key object to get the associated lock for.</param>
@@ -38,13 +39,13 @@ public abstract class LockPool<T> where T : class
 {
     /// <summary>
     /// Gets the shared, process-wide instance of the lock pool.
-    /// For this shared pool, the same lock instance is returned for the same key,
-    /// and its lifetime is tied to the lifetime of the key object.
+    /// For this shared pool, the same lock instance is returned for the same key object instance,
+    /// regardless of key equality or hash codes, and its lifetime is tied to the lifetime of the key object.
     /// </summary>
     public static LockPool<T> Shared { get; } = new SharedLockPool<T>();
 
     /// <summary>
-    /// Gets the <see cref="Lock"/> instance associated with the specified key object.
+    /// Gets the <see cref="Lock"/> instance associated with the specified key object instance.
     /// </summary>
     /// <param name="key">The key object to get the associated lock for.</param>
     /// <returns>The <see cref="Lock"/> instance associated with <paramref name="key"/>.</returns>
@@ -54,7 +55,8 @@ public abstract class LockPool<T> where T : class
 
 /// <summary>
 /// The shared <see cref="LockPool{T}"/> implementation that uses a <see cref="ConditionalWeakTable{TKey, TValue}"/>
-/// to associate a unique <see cref="Lock"/> instance with each key for its lifetime.
+/// to associate a unique <see cref="Lock"/> instance with each key object instance for its lifetime.
+/// Key equality and hash codes are not used.
 /// </summary>
 /// <typeparam name="T">The type of the key object.</typeparam>
 internal sealed class SharedLockPool<T> : LockPool<T> where T : class

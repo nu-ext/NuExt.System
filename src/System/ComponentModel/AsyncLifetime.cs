@@ -166,6 +166,10 @@ public sealed class AsyncLifetime : AsyncDisposable, IAsyncLifetime
     /// on the captured synchronization context. When <see langword="true"/>, 
     /// the context is preserved for the start of <paramref name="subscribe"/>.
     /// </param>
+    /// <remarks>
+    /// <paramref name="subscribe"/> must not call methods on this <see cref="AsyncLifetime"/> instance,
+    /// because the lifetime remains locked until the subscription completes.
+    /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown if either subscribe or unsubscribe is null.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if trying to add actions to a terminated <see cref="AsyncLifetime"/> instance.</exception>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -267,8 +271,12 @@ public sealed class AsyncLifetime : AsyncDisposable, IAsyncLifetime
                 exceptions.Add(ex);
             }
         }
+
+        Array.Clear(snapshot, 0, count);
         pool.Return(snapshot);
+
         Debug.Assert(IsTerminated, $"{nameof(AsyncLifetime)} is not terminated");
+
         if (exceptions is not null)
         {
             throw new AggregateException(exceptions);

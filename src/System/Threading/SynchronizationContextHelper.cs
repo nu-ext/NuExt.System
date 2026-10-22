@@ -5,6 +5,13 @@ using System.Runtime.CompilerServices;
 
 namespace System.Threading;
 
+/// <summary>
+/// Provides thread-access checks for a synchronization context.
+/// </summary>
+/// <param name="synchronizationContext">The synchronization context whose thread access is checked.</param>
+/// <exception cref="ArgumentNullException">
+/// <paramref name="synchronizationContext"/> is <see langword="null"/>.
+/// </exception>
 public sealed class SynchronizationContextHelper(SynchronizationContext synchronizationContext)
 {
     private sealed class CheckAccessInvoker(Func<SynchronizationContext, Func<bool>> factory)
@@ -33,17 +40,28 @@ public sealed class SynchronizationContextHelper(SynchronizationContext synchron
         set => Interlocked.Exchange(ref field, value);
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the synchronization context type is recognized as thread-affine.
+    /// </summary>
+    /// <value>
+    /// <see langword="true"/> if the context implements
+    /// <see cref="IThreadAffineSynchronizationContext"/> or its type is included in the predefined
+    /// set of known thread-affine synchronization contexts; otherwise, <see langword="false"/>.
+    /// </value>
+    /// <remarks>
+    /// This property describes recognition of the context type. It does not guarantee that
+    /// <see cref="CheckAccess"/> can obtain a functional access-checking delegate for the instance.
+    /// </remarks>
     public bool IsThreadAffineKnown { get; } = synchronizationContext.IsThreadAffineKnown;
 
-    public bool UseReferenceEquals { get; init; } = true;
-
+    /// <summary>
+    /// Determines whether the current thread has access to the synchronization context.
+    /// </summary>
+    /// <returns>
+    /// <see langword="true"/> if the current thread has access; otherwise, <see langword="false"/>.
+    /// </returns>
     public bool CheckAccess()
     {
-        if (UseReferenceEquals && IsThreadAffineKnown && ReferenceEquals(SynchronizationContext.Current, _synchronizationContext))
-        {
-            return true;
-        }
-
         var checkAccess = CheckAccessDelegate ??= GetCheckAccessDelegate();
         return checkAccess();
     }
@@ -108,229 +126,229 @@ public sealed class SynchronizationContextHelper(SynchronizationContext synchron
 
     private static CheckAccessInvoker CreateCheckAccessInvoker(Type type)
     {
+        // Use expression compilation only when the runtime can generate and compile
+        // dynamic code. AOT environments use the reflection-based fallback below;
+        // do not replace this with interpreted expression compilation.
+#if NET5_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+        bool supportCompile = RuntimeFeature.IsDynamicCodeSupported && RuntimeFeature.IsDynamicCodeCompiled;
+#else
+        bool supportCompile = true;
+#endif
+
         var fullName = type.FullName;
         string message;
         switch (fullName)
         {
             case "Avalonia.Threading.AvaloniaSynchronizationContext":
             case "System.Windows.Threading.DispatcherSynchronizationContext":
+            {
+                var dispatcherTypeFullName = fullName.Substring(0, fullName.LastIndexOf('.') + 1) + "Dispatcher";
+                Debug.Assert(dispatcherTypeFullName is "System.Windows.Threading.Dispatcher" or "Avalonia.Threading.Dispatcher");
+                var dispatcherFields = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                FieldInfo? dispatcherField = null;
+                foreach (var field in dispatcherFields)
                 {
-                    var dispatcherTypeFullName = fullName.Substring(0, fullName.LastIndexOf('.') + 1) + "Dispatcher";
-                    Debug.Assert(dispatcherTypeFullName is "System.Windows.Threading.Dispatcher" or "Avalonia.Threading.Dispatcher");
-                    var dispatcherFields = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-                    FieldInfo? dispatcherField = null;
-                    foreach (var field in dispatcherFields)
+                    if (field.FieldType.FullName != dispatcherTypeFullName) continue;
+                    dispatcherField = field;
+                    break;
+                }
+                Debug.Assert(dispatcherField != null);
+                if (dispatcherField == null)
+                {
+                    return new CheckAccessInvoker(_ => s_falseFunc);
+                }
+                var checkAccessMethod = dispatcherField.FieldType.GetMethod("CheckAccess",
+                    BindingFlags.Instance | BindingFlags.Public,
+                    binder: null, types: Type.EmptyTypes, modifiers: null);
+                Debug.Assert(checkAccessMethod != null);
+                if (checkAccessMethod == null)
+                {
+                    return new CheckAccessInvoker(_ => s_falseFunc);
+                }
+
+                if (supportCompile)
+                {
+                    try
                     {
-                        if (field.FieldType.FullName != dispatcherTypeFullName) continue;
-                        dispatcherField = field;
-                        break;
-                    }
-                    Debug.Assert(dispatcherField != null);
-                    if (dispatcherField == null)
-                    {
-                        return new CheckAccessInvoker(_ => s_falseFunc);
-                    }
-                    var checkAccessMethod = dispatcherField.FieldType.GetMethod("CheckAccess",
-                        BindingFlags.Instance | BindingFlags.Public,
-                        binder: null, types: Type.EmptyTypes, modifiers: null);
-                    Debug.Assert(checkAccessMethod != null);
-                    if (checkAccessMethod == null)
-                    {
-                        return new CheckAccessInvoker(_ => s_falseFunc);
-                    }
-#if NET5_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
-                    bool supportCompile = RuntimeFeature.IsDynamicCodeSupported && RuntimeFeature.IsDynamicCodeCompiled;
-#else
-                    bool supportCompile = true;
-#endif
-                    Debug.Assert(supportCompile);
-                    if (supportCompile)
-                    {
-                        try
+                        var ctxParam = Expression.Parameter(typeof(SynchronizationContext), "context");
+                        var castContext = Expression.Convert(ctxParam, type);
+                        var fieldAccess = Expression.Field(castContext, dispatcherField);
+                        var methodCall = Expression.Call(fieldAccess, checkAccessMethod);
+
+                        var nullCheck = Expression.NotEqual(fieldAccess, Expression.Constant(null, dispatcherField.FieldType));
+                        var conditional = Expression.Condition(nullCheck, methodCall, Expression.Constant(false));
+                        var lambda = Expression.Lambda<Func<SynchronizationContext, bool>>(conditional, ctxParam);
+
+                        // This branch is entered only when dynamic compilation is available.
+                        var compiledFunc = lambda.Compile();
+
+                        CheckAccessInvoker invoker = null!;
+                        invoker = new CheckAccessInvoker(GetCompiledFactory);
+                        return invoker;
+
+                        Func<bool> GetCompiledFactory(SynchronizationContext ctx)
                         {
-                            var ctxParam = Expression.Parameter(typeof(SynchronizationContext), "context");
-                            var castContext = Expression.Convert(ctxParam, type);
-                            var fieldAccess = Expression.Field(castContext, dispatcherField);
-                            var methodCall = Expression.Call(fieldAccess, checkAccessMethod);
+                            var current = () => compiledFunc(ctx);
+                            return InvokeCompiled;
 
-                            var nullCheck = Expression.NotEqual(fieldAccess, Expression.Constant(null, dispatcherField.FieldType));
-                            var conditional = Expression.Condition(nullCheck, methodCall, Expression.Constant(false));
-                            var lambda = Expression.Lambda<Func<SynchronizationContext, bool>>(conditional, ctxParam);
-                            var compiledFunc = lambda.Compile();
-
-                            CheckAccessInvoker invoker = null!;
-                            invoker = new CheckAccessInvoker(GetCompiledFactory);
-                            return invoker;
-
-                            Func<bool> GetCompiledFactory(SynchronizationContext ctx)
+                            bool InvokeCompiled()
                             {
-                                var current = () => compiledFunc(ctx);
-                                return InvokeCompiled;
-
-                                bool InvokeCompiled()
+                                try
                                 {
-                                    try
-                                    {
-                                        return current();
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Debug.Assert(ex is MethodAccessException or FieldAccessException or PlatformNotSupportedException or MemberAccessException);
-                                        string msg = $"Expression compiled function call failed for {fullName}, using reflection fallback: {ex.Message}";
-                                        Trace.WriteLine(msg);
-                                        Debug.Fail(msg);
-                                    }
-
-                                    try
-                                    {
-                                        var newFactory = invoker.Switch(GetReflectiveFactory);
-                                        current = newFactory(ctx);
-                                        return current();
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Debug.Assert(ex is MethodAccessException or FieldAccessException or PlatformNotSupportedException or MemberAccessException);
-                                        string msg = $"Reflected function call failed for {fullName}, using false fallback: {ex.Message}";
-                                        Trace.WriteLine(msg);
-                                        Debug.Fail(msg);
-                                    }
-
-                                    current = invoker.Switch(_ => s_falseFunc)(ctx);
                                     return current();
                                 }
+                                catch (Exception ex)
+                                {
+                                    Debug.Assert(ex is MethodAccessException or FieldAccessException or PlatformNotSupportedException or MemberAccessException);
+                                    string msg = $"Expression compiled function call failed for {fullName}, using reflection fallback: {ex.Message}";
+                                    Trace.WriteLine(msg);
+                                    Debug.Fail(msg);
+                                }
+
+                                try
+                                {
+                                    var newFactory = invoker.Switch(GetReflectiveFactory);
+                                    current = newFactory(ctx);
+                                    return current();
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.Assert(ex is MethodAccessException or FieldAccessException or PlatformNotSupportedException or MemberAccessException);
+                                    string msg = $"Reflected function call failed for {fullName}, using false fallback: {ex.Message}";
+                                    Trace.WriteLine(msg);
+                                    Debug.Fail(msg);
+                                }
+
+                                current = invoker.Switch(_ => s_falseFunc)(ctx);
+                                return current();
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            message = $"Expression compilation failed for {fullName}, using reflection fallback: {ex.Message}";
-                            Trace.WriteLine(message);
-                            Debug.Fail(message);
-                        }
                     }
-
-                    return new CheckAccessInvoker(GetReflectiveFactory);
-
-                    Func<bool> GetReflectiveFactory(SynchronizationContext ctx)
+                    catch (Exception ex)
                     {
-                        var dispatcher = dispatcherField.GetValue(ctx);
-                        Debug.Assert(dispatcher != null);
-                        if (dispatcher == null) return s_falseFunc;
-                        var checkAccess = Delegate.CreateDelegate(typeof(Func<bool>), dispatcher, checkAccessMethod, throwOnBindFailure: false) as Func<bool>;
-                        Debug.Assert(checkAccess != null);
-                        return checkAccess ?? s_falseFunc;
+                        message = $"Expression compilation failed for {fullName}, using reflection fallback: {ex.Message}";
+                        Trace.WriteLine(message);
+                        Debug.Fail(message);
                     }
                 }
+
+                return new CheckAccessInvoker(GetReflectiveFactory);
+
+                Func<bool> GetReflectiveFactory(SynchronizationContext ctx)
+                {
+                    var dispatcher = dispatcherField.GetValue(ctx);
+                    Debug.Assert(dispatcher != null);
+                    if (dispatcher == null) return s_falseFunc;
+                    var checkAccess = Delegate.CreateDelegate(typeof(Func<bool>), dispatcher, checkAccessMethod, throwOnBindFailure: false) as Func<bool>;
+                    Debug.Assert(checkAccess != null);
+                    return checkAccess ?? s_falseFunc;
+                }
+            }
             case "System.Windows.Forms.WindowsFormsSynchronizationContext":
+            {
+                var controlFields = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                FieldInfo? controlField = null;
+                foreach (var field in controlFields)
                 {
-                    var controlFields = type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-                    FieldInfo? controlField = null;
-                    foreach (var field in controlFields)
+                    if (field.FieldType.FullName != "System.Windows.Forms.Control") continue;
+                    controlField = field;
+                    break;
+                }
+                Debug.Assert(controlField != null);
+                if (controlField == null)
+                {
+                    return new CheckAccessInvoker(_ => s_falseFunc);
+                }
+                var invokeRequiredProperty = controlField.FieldType.GetProperty("InvokeRequired");
+                Debug.Assert(invokeRequiredProperty != null);
+                if (invokeRequiredProperty == null)
+                {
+                    return new CheckAccessInvoker(_ => s_falseFunc);
+                }
+
+                if (supportCompile)
+                {
+                    try
                     {
-                        if (field.FieldType.FullName != "System.Windows.Forms.Control") continue;
-                        controlField = field;
-                        break;
-                    }
-                    Debug.Assert(controlField != null);
-                    if (controlField == null)
-                    {
-                        return new CheckAccessInvoker(_ => s_falseFunc);
-                    }
-                    var invokeRequiredProperty = controlField.FieldType.GetProperty("InvokeRequired");
-                    Debug.Assert(invokeRequiredProperty != null);
-                    if (invokeRequiredProperty == null)
-                    {
-                        return new CheckAccessInvoker(_ => s_falseFunc);
-                    }
-#if NET5_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
-                    bool supportCompile = RuntimeFeature.IsDynamicCodeSupported && RuntimeFeature.IsDynamicCodeCompiled;
-#else
-                    bool supportCompile = true;
-#endif
-                    Debug.Assert(supportCompile);
-                    if (supportCompile)
-                    {
-                        try
+                        var ctxParam = Expression.Parameter(typeof(SynchronizationContext), "context");
+                        var castContext = Expression.Convert(ctxParam, type);
+                        var fieldAccess = Expression.Field(castContext, controlField);
+                        var getProperty = Expression.Property(fieldAccess, invokeRequiredProperty);
+                        var invert = Expression.Not(getProperty);
+
+                        var nullCheck = Expression.NotEqual(fieldAccess, Expression.Constant(null, controlField.FieldType));
+                        var conditional = Expression.Condition(nullCheck, invert, Expression.Constant(false));
+                        var lambda = Expression.Lambda<Func<SynchronizationContext, bool>>(conditional, ctxParam);
+
+                        // This branch is entered only when dynamic compilation is available.
+                        var compiledFunc = lambda.Compile();
+
+                        CheckAccessInvoker invoker = null!;
+                        invoker = new CheckAccessInvoker(GetCompiledFactory);
+                        return invoker;
+
+                        Func<bool> GetCompiledFactory(SynchronizationContext ctx)
                         {
-                            var ctxParam = Expression.Parameter(typeof(SynchronizationContext), "context");
-                            var castContext = Expression.Convert(ctxParam, type);
-                            var fieldAccess = Expression.Field(castContext, controlField);
-                            var getProperty = Expression.Property(fieldAccess, invokeRequiredProperty);
-                            var invert = Expression.Not(getProperty);
+                            var current = () => compiledFunc(ctx);
+                            return InvokeCompiled;
 
-                            var nullCheck = Expression.NotEqual(fieldAccess, Expression.Constant(null, controlField.FieldType));
-                            var conditional = Expression.Condition(nullCheck, invert, Expression.Constant(false));
-                            var lambda = Expression.Lambda<Func<SynchronizationContext, bool>>(conditional, ctxParam);
-#if !NETFRAMEWORK || NET471_OR_GREATER
-                            var compiledFunc = lambda.Compile(true);
-#else
-                            var compiledFunc = lambda.Compile();
-#endif
-                            CheckAccessInvoker invoker = null!;
-                            invoker = new CheckAccessInvoker(GetCompiledFactory);
-                            return invoker;
-
-                            Func<bool> GetCompiledFactory(SynchronizationContext ctx)
+                            bool InvokeCompiled()
                             {
-                                var current = () => compiledFunc(ctx);
-                                return InvokeCompiled;
-
-                                bool InvokeCompiled()
+                                try
                                 {
-                                    try
-                                    {
-                                        return current();
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Debug.Assert(ex is MethodAccessException or FieldAccessException or PlatformNotSupportedException or MemberAccessException);
-                                        string msg = $"Expression compiled function call failed for {fullName}, using reflection fallback: {ex.Message}";
-                                        Trace.WriteLine(msg);
-                                        Debug.Fail(msg);
-                                    }
-
-                                    try
-                                    {
-                                        var newFactory = invoker.Switch(GetReflectiveFactory);
-                                        current = newFactory(ctx);
-                                        return current();
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Debug.Assert(ex is MethodAccessException or FieldAccessException or PlatformNotSupportedException or MemberAccessException);
-                                        string msg = $"Reflected function call failed for {fullName}, using false fallback: {ex.Message}";
-                                        Trace.WriteLine(msg);
-                                        Debug.Fail(msg);
-                                    }
-
-                                    current = invoker.Switch(_ => s_falseFunc)(ctx);
                                     return current();
                                 }
+                                catch (Exception ex)
+                                {
+                                    Debug.Assert(ex is MethodAccessException or FieldAccessException or PlatformNotSupportedException or MemberAccessException);
+                                    string msg = $"Expression compiled function call failed for {fullName}, using reflection fallback: {ex.Message}";
+                                    Trace.WriteLine(msg);
+                                    Debug.Fail(msg);
+                                }
+
+                                try
+                                {
+                                    var newFactory = invoker.Switch(GetReflectiveFactory);
+                                    current = newFactory(ctx);
+                                    return current();
+                                }
+                                catch (Exception ex)
+                                {
+                                    Debug.Assert(ex is MethodAccessException or FieldAccessException or PlatformNotSupportedException or MemberAccessException);
+                                    string msg = $"Reflected function call failed for {fullName}, using false fallback: {ex.Message}";
+                                    Trace.WriteLine(msg);
+                                    Debug.Fail(msg);
+                                }
+
+                                current = invoker.Switch(_ => s_falseFunc)(ctx);
+                                return current();
                             }
                         }
-                        catch (Exception ex)
-                        {
-                            message = $"Expression compilation failed for {fullName}, using reflection fallback: {ex.Message}";
-                            Trace.WriteLine(message);
-                            Debug.Fail(message);
-                        }
                     }
-
-                    return new CheckAccessInvoker(GetReflectiveFactory);
-
-                    Func<bool> GetReflectiveFactory(SynchronizationContext ctx)
+                    catch (Exception ex)
                     {
-                        var control = controlField.GetValue(ctx);
-                        Debug.Assert(control != null);
-                        if (control == null) return s_falseFunc;
-                        var getter = invokeRequiredProperty.GetMethod;
-                        Debug.Assert(getter != null);
-                        var getInvokeRequired = getter != null
-                            ? Delegate.CreateDelegate(typeof(Func<bool>), control, getter, throwOnBindFailure: false) as Func<bool>
-                            : null;
-                        Debug.Assert(getInvokeRequired != null);
-                        return getInvokeRequired != null ? () => !getInvokeRequired() : s_falseFunc;
+                        message = $"Expression compilation failed for {fullName}, using reflection fallback: {ex.Message}";
+                        Trace.WriteLine(message);
+                        Debug.Fail(message);
                     }
                 }
+
+                return new CheckAccessInvoker(GetReflectiveFactory);
+
+                Func<bool> GetReflectiveFactory(SynchronizationContext ctx)
+                {
+                    var control = controlField.GetValue(ctx);
+                    Debug.Assert(control != null);
+                    if (control == null) return s_falseFunc;
+                    var getter = invokeRequiredProperty.GetMethod;
+                    Debug.Assert(getter != null);
+                    var getInvokeRequired = getter != null
+                        ? Delegate.CreateDelegate(typeof(Func<bool>), control, getter, throwOnBindFailure: false) as Func<bool>
+                        : null;
+                    Debug.Assert(getInvokeRequired != null);
+                    return getInvokeRequired != null ? () => !getInvokeRequired() : s_falseFunc;
+                }
+            }
         }
 
         message = $"Unexpected delegate resolution for {fullName}";

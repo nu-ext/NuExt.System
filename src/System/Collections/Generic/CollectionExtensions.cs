@@ -137,20 +137,37 @@ public static class CollectionExtensions
     /// <typeparam name="T">The type of elements in the collection, which must implement IDisposable.</typeparam>
     /// <param name="self">The collection whose elements will be disposed and cleared. This value cannot be null.</param>
     /// <exception cref="ArgumentNullException">Thrown when the self parameter is null.</exception>
+    /// <exception cref="AggregateException">Thrown when one or more exceptions occur during the disposal of elements.</exception>
     public static void DisposeAndClear<T>(this ICollection<T> self) where T : IDisposable?
     {
         Debug.Assert(self != null);
         ArgumentNullException.ThrowIfNull(self);
 
+        List<Exception>? exceptions = null;
         foreach (var item in self)
         {
-            item?.Dispose();
+            if (item is null) continue;
+            try
+            {
+                item.Dispose();
+            }
+            catch (Exception ex)
+            {
+                exceptions ??= [];
+                exceptions.Add(ex);
+            }
         }
+
         self.Clear();
+
+        if (exceptions is not null)
+        {
+            throw new AggregateException(exceptions);
+        }
     }
 
     /// <summary>
-    /// Asynchronously disposes all elements in the collection in the order they were added and then clears the collection.
+    /// Asynchronously disposes all elements in the collection and then clears the collection.
     /// Collects and throws all exceptions that occur during disposal as an AggregateException.
     /// </summary>
     /// <typeparam name="T">The type of elements in the collection, which must implement IAsyncDisposable.</typeparam>
@@ -182,10 +199,12 @@ public static class CollectionExtensions
                 exceptions.Add(ex);
             }
         }
+
+        self.Clear();
+
         if (exceptions is not null)
         {
             throw new AggregateException(exceptions);
         }
-        self.Clear();
     }
 }

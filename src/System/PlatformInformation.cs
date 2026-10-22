@@ -12,7 +12,7 @@ public static class PlatformInformation
         IsWindows = InitializeIsWindows();
         IsLinux = InitializeIsLinux();
         IsMacOS = InitializeIsMacOS();
-        IsUnix = !IsWindows;
+        IsUnix = IsLinux || IsMacOS;
 
         Is64BitProcess = Environment.Is64BitProcess;
         OSDescription = GetOSDescription();

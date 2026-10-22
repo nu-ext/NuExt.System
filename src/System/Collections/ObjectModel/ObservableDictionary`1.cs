@@ -97,6 +97,7 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
         {
             ArgumentNullException.ThrowIfNull(key);
             CheckReentrancy();
+
             bool isExist = _innerDictionary.TryGetValue(key, out var oldValue);
             if (!isExist || !EqualityComparer<TValue>.Default.Equals(oldValue, value))
             {
@@ -162,61 +163,65 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
         var builder = capacity > 8
             ? new ValueListBuilder<KeyValuePair<TKey, TValue>>(capacity)
             : new ValueListBuilder<KeyValuePair<TKey, TValue>>([default, default, default, default, default, default, default, default]);
-        foreach (var pair in items)
+        try
         {
-            if (!tempSet.Add(pair.Key) || _innerDictionary.ContainsKey(pair.Key))
+            foreach (var pair in items)
             {
-                builder.Dispose();
-                ThrowHelper.ThrowAddingDuplicateWithKeyArgumentException(pair.Key);
-            }
-            builder.Append(pair);
-        }
+                if (!tempSet.Add(pair.Key) || _innerDictionary.ContainsKey(pair.Key))
+                {
+                    ThrowHelper.ThrowAddingDuplicateWithKeyArgumentException(pair.Key);
+                }
 
-        if (builder.Length == 0)
+                builder.Append(pair);
+            }
+
+            if (builder.Length == 0)
+            {
+                return;
+            }
+
+#if NET5_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+            _innerDictionary.EnsureCapacity(_innerDictionary.Count + builder.Length);
+#endif
+            if (builder.Length == 1)
+            {
+                var first = builder[0];
+                _innerDictionary.Add(first.Key, first.Value);
+
+                OnCountPropertyChanged();
+                OnIndexerPropertyChanged();
+                OnCollectionChanged(NotifyCollectionChangedAction.Add, first);
+            }
+            else
+            {
+                foreach (var pair in builder.AsSpan())
+                {
+                    _innerDictionary.Add(pair.Key, pair.Value);
+                }
+#if NET5_0_OR_GREATER
+                _orderedKeys.EnsureCapacity(_orderedKeys.Count + builder.Length);
+#endif
+#if NET5_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
+                _indexMap.EnsureCapacity(_indexMap.Count + builder.Length);
+#endif
+                foreach (var pair in builder.AsSpan())
+                {
+                    _indexMap[pair.Key] = _orderedKeys.Count;
+                    _orderedKeys.Add(pair.Key);
+                }
+
+                OnCountPropertyChanged();
+                OnIndexerPropertyChanged();
+                OnCollectionChanged(EventArgsCache.ResetCollectionChanged);
+            }
+#if DEBUG
+            ValidateState();
+#endif
+        }
+        finally
         {
             builder.Dispose();
-            return;
         }
-
-#if NET5_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
-        _innerDictionary.EnsureCapacity(_innerDictionary.Count + builder.Length);
-#endif
-        if (builder.Length == 1)
-        {
-            var first = builder[0];
-            _innerDictionary.Add(first.Key, first.Value);
-
-            OnCountPropertyChanged();
-            OnIndexerPropertyChanged();
-            OnCollectionChanged(NotifyCollectionChangedAction.Add, first);
-        }
-        else
-        {
-            foreach (var pair in builder.AsSpan())
-            {
-                _innerDictionary.Add(pair.Key, pair.Value);
-            }
-#if NET5_0_OR_GREATER
-            _orderedKeys.EnsureCapacity(_orderedKeys.Count + builder.Length);
-#endif
-#if NET5_0_OR_GREATER || NETSTANDARD2_1_OR_GREATER
-            _indexMap.EnsureCapacity(_indexMap.Count + builder.Length);
-#endif
-            foreach (var pair in builder.AsSpan())
-            {
-                _indexMap[pair.Key] = _orderedKeys.Count;
-                _orderedKeys.Add(pair.Key);
-            }
-
-            OnCountPropertyChanged();
-            OnIndexerPropertyChanged();
-            OnCollectionChanged(EventArgsCache.ResetCollectionChanged);
-        }
-
-        builder.Dispose();
-#if DEBUG
-        ValidateState();
-#endif
     }
 
     /// <summary>
@@ -232,53 +237,63 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
         ArgumentNullException.ThrowIfNull(keys);
         CheckReentrancy();
 
+        var keyList = new List<TKey>(keys);
         var builder = new ValueListBuilder<KeyValuePair<TKey, TValue>>([default, default, default, default, default, default, default, default]);
-        foreach (var key in keys)
+        try
         {
-            if (_innerDictionary.Remove(key, out var value))
+            foreach (var key in keyList)
             {
-                builder.Append(new KeyValuePair<TKey, TValue>(key, value));
+                if (_innerDictionary.Remove(key, out var value))
+                {
+                    builder.Append(new KeyValuePair<TKey, TValue>(key, value));
+                }
             }
+
+            if (builder.Length == 0)
+            {
+                return [];
+            }
+
+            OnCountPropertyChanged();
+            OnIndexerPropertyChanged();
+            if (builder.Length == 1)
+            {
+                OnCollectionChanged(NotifyCollectionChangedAction.Remove, builder[0]);
+            }
+            else
+            {
+                _indexMap.Clear();
+                bool removed = true;
+                foreach (var pair in builder.AsSpan())
+                {
+                    removed &= _orderedKeys.Remove(pair.Key);
+                }
+
+                Debug.Assert(removed);
+
+                for (int i = 0; i < _orderedKeys.Count; i++)
+                {
+                    _indexMap[_orderedKeys[i]] = i;
+                }
+
+                OnCollectionChanged(EventArgsCache.ResetCollectionChanged);
+            }
+#if DEBUG
+            ValidateState();
+#endif
+            return builder.ToArray();
         }
-        if (builder.Length == 0)
+        finally
         {
             builder.Dispose();
-            return [];
         }
-
-        OnCountPropertyChanged();
-        OnIndexerPropertyChanged();
-        if (builder.Length == 1)
-        {
-            OnCollectionChanged(NotifyCollectionChangedAction.Remove, builder[0]);
-        }
-        else
-        {
-            _indexMap.Clear();
-            bool removed = true;
-            foreach (var pair in builder.AsSpan())
-            {
-                removed &= _orderedKeys.Remove(pair.Key);
-            }
-            Debug.Assert(removed);
-
-            for (int i = 0; i < _orderedKeys.Count; i++)
-            {
-                _indexMap[_orderedKeys[i]] = i;
-            }
-
-            OnCollectionChanged(EventArgsCache.ResetCollectionChanged);
-        }
-#if DEBUG
-        ValidateState();
-#endif
-        return builder.ToArray();
     }
 
     /// <inheritdoc cref="Dictionary{TKey, TValue}.Add"/>
     public void Add(TKey key, TValue value)
     {
         CheckReentrancy();
+
         _innerDictionary.Add(key, value);
 
         OnCountPropertyChanged();
@@ -301,6 +316,7 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
     bool ICollection<KeyValuePair<TKey, TValue>>.Remove(KeyValuePair<TKey, TValue> keyValuePair)
     {
         CheckReentrancy();
+
         ICollection<KeyValuePair<TKey, TValue>> dict = _innerDictionary;
         if (!dict.Remove(keyValuePair)) return false;
 
@@ -317,6 +333,7 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
     public void Clear()
     {
         CheckReentrancy();
+
         if (_innerDictionary.Count <= 0) return;
 
         _innerDictionary.Clear();
@@ -347,26 +364,11 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
     IEnumerator<KeyValuePair<TKey, TValue>> IEnumerable<KeyValuePair<TKey, TValue>>.GetEnumerator()
         => GetEnumerator();
 
-#if NET9_0_OR_GREATER
-    /// <inheritdoc cref="Dictionary{TKey, TValue}.GetAlternateLookup"/>
-    public Dictionary<TKey, TValue>.AlternateLookup<TAlternateKey> GetAlternateLookup<TAlternateKey>()
-        where TAlternateKey : notnull, allows ref struct
-    {
-        return _innerDictionary.GetAlternateLookup<TAlternateKey>();
-    }
-
-    /// <inheritdoc cref="Dictionary{TKey, TValue}.TryGetAlternateLookup"/>
-    public bool TryGetAlternateLookup<TAlternateKey>(
-        out Dictionary<TKey, TValue>.AlternateLookup<TAlternateKey> lookup)
-        where TAlternateKey : notnull, allows ref struct
-    {
-        return _innerDictionary.TryGetAlternateLookup(out lookup);
-    }
-#endif
-
     /// <inheritdoc cref="Dictionary{TKey, TValue}.Remove(TKey)"/>
     public bool Remove(TKey key)
     {
+        CheckReentrancy();
+
         if (!_innerDictionary.Remove(key, out var value)) return false;
 
         OnCountPropertyChanged();
@@ -385,6 +387,8 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
 #endif
     public bool Remove(TKey key, [MaybeNullWhen(false)] out TValue value)
     {
+        CheckReentrancy();
+
         if (!_innerDictionary.Remove(key, out value)) return false;
 
         OnCountPropertyChanged();
@@ -412,6 +416,8 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
 #endif
     public bool TryAdd(TKey key, TValue value)
     {
+        CheckReentrancy();
+
         if (!_innerDictionary.TryAdd(key, value)) return false;
 
         OnCountPropertyChanged();
@@ -425,13 +431,13 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
 
     bool ICollection<KeyValuePair<TKey, TValue>>.IsReadOnly => false;
 
-    bool IList.IsFixedSize => false;
+    bool IList.IsFixedSize => true;
 
     bool IList.IsReadOnly => true;
 
     object? IList.this[int index]
     {
-        get 
+        get
         {
             var key = _orderedKeys[index];
             return new KeyValuePair<TKey, TValue>(key, _innerDictionary[key]);
@@ -577,34 +583,34 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
         switch (action)
         {
             case NotifyCollectionChangedAction.Add:
-                {
-                    // Append at the end to preserve insertion order.
-                    int index = _orderedKeys.Count;
-                    _orderedKeys.Add(item.Key);
-                    _indexMap[item.Key] = index;
-                    OnCollectionChanged(new NotifyCollectionChangedEventArgs(action, item, index));
-                    break;
-                }
+            {
+                // Append at the end to preserve insertion order.
+                int index = _orderedKeys.Count;
+                _orderedKeys.Add(item.Key);
+                _indexMap[item.Key] = index;
+                OnCollectionChanged(new NotifyCollectionChangedEventArgs(action, item, index));
+                break;
+            }
 
             case NotifyCollectionChangedAction.Remove:
+            {
+                // Lookup current index from the map, then remove and fix tail indices.
+                if (_indexMap.Remove(item.Key, out int index))
                 {
-                    // Lookup current index from the map, then remove and fix tail indices.
-                    if (_indexMap.Remove(item.Key, out int index))
-                    {
-                        _orderedKeys.RemoveAt(index);
+                    _orderedKeys.RemoveAt(index);
 
-                        // Update tail indices to preserve order (O(n) in the tail).
-                        for (int j = index; j < _orderedKeys.Count; j++)
-                            _indexMap[_orderedKeys[j]] = j;
+                    // Update tail indices to preserve order (O(n) in the tail).
+                    for (int j = index; j < _orderedKeys.Count; j++)
+                        _indexMap[_orderedKeys[j]] = j;
 
-                        OnCollectionChanged(new NotifyCollectionChangedEventArgs(action, item, index));
-                    }
-                    else
-                    {
-                        OnCollectionReset();
-                    }
-                    break;
+                    OnCollectionChanged(new NotifyCollectionChangedEventArgs(action, item, index));
                 }
+                else
+                {
+                    OnCollectionReset();
+                }
+                break;
+            }
 
             default:
                 Debug.Fail($"Unexpected action {action}");
@@ -669,7 +675,6 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
         public void Dispose() => collection._blockReentrancyCount--;
     }
 
-
     [Conditional("DEBUG")]
     private void ValidateState()
     {
@@ -704,7 +709,8 @@ public class ObservableDictionary<TKey, TValue>(int capacity, IEqualityComparer<
 
     int IList.IndexOf(object? value)
     {
-        if (value is KeyValuePair<TKey, TValue> kvp && _indexMap.TryGetValue(kvp.Key, out int index))
+        if (value is KeyValuePair<TKey, TValue> kvp && ((ICollection<KeyValuePair<TKey, TValue>>)_innerDictionary).Contains(kvp)
+                                                    && _indexMap.TryGetValue(kvp.Key, out int index))
         {
             return index;
         }

@@ -12,8 +12,8 @@ namespace System.Threading;
 /// <remarks>
 /// <para>
 /// Unlike <see cref="Lazy{T}"/>, which provides synchronous lazy initialization,
-/// <see cref="AsyncLazy{T}"/> represents the asynchronous initialization pattern where
-/// the factory method returns a <see cref="Task{T}"/>.
+/// <see cref="AsyncLazy{T}"/> represents an asynchronous initialization pattern in which
+/// the initialized value is exposed through a cached <see cref="Task{T}"/>.
 /// </para>
 /// <para>
 /// The initialization factory is executed only once, upon the first access to
@@ -33,15 +33,15 @@ public sealed class AsyncLazy<T>
     /// </param>
     /// <param name="runSynchronously">
     /// <para>
-    /// If <see langword="true"/>, the <paramref name="factory"/> delegate is invoked
-    /// directly by the underlying lazy initializer. The synchronous portion of the delegate
-    /// executes within a lock, which carries a risk of deadlock.
+    /// <see langword="true"/> to invoke <paramref name="factory"/> directly from the underlying
+    /// lazy initializer. The synchronous portion of the factory executes on the thread that first
+    /// accesses the value and while the lazy initializer is executing its value factory.
     /// </para>
     /// <para>
-    /// If <see langword="false"/> (default), the <paramref name="factory"/> delegate is
-    /// wrapped in a <see cref="Task.Run{T}(Func{Task{T}})"/> call, ensuring it starts execution
-    /// on a ThreadPool thread and avoiding deadlocks related to synchronization contexts.
-    /// This is the safer option for most scenarios.
+    /// <see langword="false"/> to invoke <paramref name="factory"/> through
+    /// <see cref="Task.Run{T}(Func{Task{T}})"/> on a thread pool thread. This prevents the
+    /// synchronous portion of the factory from running inside the lazy initializer and from
+    /// capturing the caller's current synchronization context.
     /// </para>
     /// </param>
     /// <exception cref="ArgumentNullException">
@@ -66,13 +66,13 @@ public sealed class AsyncLazy<T>
     /// <remarks>
     /// <para>
     /// This constructor is intended for CPU-intensive, synchronous work. The provided
-    /// <paramref name="factory"/> delegate is guaranteed to execute on a ThreadPool thread
-    /// via <see cref="Task.Run{T}(Func{T})"/>, preventing deadlocks and keeping the calling
-    /// thread responsive.
+    /// <paramref name="factory"/> delegate is executed on a thread pool thread through
+    /// <see cref="Task.Run{T}(Func{T})"/>, preventing the factory from executing on the thread
+    /// that first accesses the lazy value.
     /// </para>
     /// <para>
     /// For I/O-bound or naturally asynchronous work, use the constructor accepting a
-    /// Func&lt;Task&lt;T&gt;&gt; delegate.
+    /// <see cref="Func{TResult}"/> that returns a <see cref="Task{TResult}"/>.
     /// </para>
     /// </remarks>
     public AsyncLazy(Func<T> factory)

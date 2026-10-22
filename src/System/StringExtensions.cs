@@ -4,6 +4,9 @@ using System.Text;
 
 namespace System;
 
+/// <summary>
+/// Provides compatibility and utility methods for working with strings.
+/// </summary>
 public static class StringExtensions
 {
     internal const int StackallocCharBufferSizeLimit = 256;
@@ -57,7 +60,15 @@ public static class StringExtensions
         }
 
 #endif
-
+        /// <summary>
+        /// Concatenates five read-only character spans.
+        /// </summary>
+        /// <param name="str0">The first span to concatenate.</param>
+        /// <param name="str1">The second span to concatenate.</param>
+        /// <param name="str2">The third span to concatenate.</param>
+        /// <param name="str3">The fourth span to concatenate.</param>
+        /// <param name="str4">The fifth span to concatenate.</param>
+        /// <returns>The concatenated contents of the specified spans.</returns>
         public static string Concat(ReadOnlySpan<char> str0, ReadOnlySpan<char> str1, ReadOnlySpan<char> str2, ReadOnlySpan<char> str3, ReadOnlySpan<char> str4)
         {
             int length = checked(str0.Length + str1.Length + str2.Length + str3.Length + str4.Length);
@@ -428,20 +439,54 @@ public static class StringExtensions
     /// <exception cref="ArgumentNullException">Thrown when the input string is null.</exception>
     public static bool Contains(this string str, char value)
     {
-        Throw.IfNull(str);
+        ArgumentNullException.ThrowIfNull(str);
 
         return str.IndexOf(value) >= 0;
     }
 
+    /// <summary>
+    /// Determines whether the specified character occurs within the string using the specified comparison rules.
+    /// </summary>
+    /// <param name="str">The string to search.</param>
+    /// <param name="value">The character to seek.</param>
+    /// <param name="comparisonType">One of the values that specifies the rules for the search.</param>
+    /// <returns>
+    /// <see langword="true"/> if <paramref name="value"/> occurs within <paramref name="str"/>;
+    /// otherwise, <see langword="false"/>.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="str"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="comparisonType"/> is not a valid <see cref="StringComparison"/> value.
+    /// </exception>
     public static bool Contains(this string str, char value, StringComparison comparisonType)
     {
-        Throw.IfNull(str);
+        ArgumentNullException.ThrowIfNull(str);
 
         return str.IndexOf(value, comparisonType) >= 0;
     }
 
+    /// <summary>
+    /// Determines whether the specified string occurs within this string using the specified comparison rules.
+    /// </summary>
+    /// <param name="str">The string to search.</param>
+    /// <param name="value">The string to seek.</param>
+    /// <param name="comparisonType">One of the values that specifies the rules for the search.</param>
+    /// <returns>
+    /// <see langword="true"/> if <paramref name="value"/> occurs within <paramref name="str"/>;
+    /// otherwise, <see langword="false"/>.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="str"/> or <paramref name="value"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="comparisonType"/> is not a valid <see cref="StringComparison"/> value.
+    /// </exception>
     public static bool Contains(this string str, string value, StringComparison comparisonType)
     {
+        ArgumentNullException.ThrowIfNull(str);
+
         return str.IndexOf(value, comparisonType) >= 0;
     }
 
@@ -454,7 +499,7 @@ public static class StringExtensions
     /// <exception cref="ArgumentNullException">Thrown when the input string is null.</exception>
     public static bool EndsWith(this string str, char value)
     {
-        Throw.IfNull(str);
+        ArgumentNullException.ThrowIfNull(str);
 
         if (str.Length == 0)
             return false;
@@ -477,20 +522,29 @@ public static class StringExtensions
     /// </exception>
     public static int IndexOf(this string str, char value, int startIndex, int count)
     {
-        Throw.IfNull(str);
+        ArgumentNullException.ThrowIfNull(str);
 
-        if (str.Length == 0)
-            return -1;
-
-        return str.Substring(startIndex, count).IndexOf(value);
+        return str.IndexOf(value.ToString(), startIndex, count, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Reports the zero-based index of the first occurrence of the specified character using the specified comparison rules.
+    /// </summary>
+    /// <param name="str">The string to search.</param>
+    /// <param name="value">The character to seek.</param>
+    /// <param name="comparisonType">One of the values that specifies the rules for the search.</param>
+    /// <returns>
+    /// The zero-based index of <paramref name="value"/> if found; otherwise, -1.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="str"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="comparisonType"/> is not a valid <see cref="StringComparison"/> value.
+    /// </exception>
     public static int IndexOf(this string str, char value, StringComparison comparisonType)
     {
-        Throw.IfNull(str);
-
-        if (str.Length == 0)
-            return -1;
+        ArgumentNullException.ThrowIfNull(str);
 
         return str.IndexOf(value.ToString(), comparisonType);
     }
@@ -512,12 +566,9 @@ public static class StringExtensions
     /// </exception>
     public static int LastIndexOf(this string str, char value, int startIndex, int count)
     {
-        Throw.IfNull(str);
+        ArgumentNullException.ThrowIfNull(str);
 
-        if (startIndex < 0 || count < 0 || startIndex - count < 0)
-            throw new ArgumentOutOfRangeException();
-
-        return str.Substring(startIndex - count + 1, count).LastIndexOf(value);
+        return str.LastIndexOf(value.ToString(), startIndex, count, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -529,7 +580,7 @@ public static class StringExtensions
     /// <exception cref="ArgumentNullException">Thrown when the input string is null.</exception>
     public static bool StartsWith(this string str, char value)
     {
-        Throw.IfNull(str);
+        ArgumentNullException.ThrowIfNull(str);
 
         if (str.Length == 0)
             return false;
@@ -579,28 +630,18 @@ public static class StringExtensions
     }
 
     /// <summary>
-    /// Reverses the characters in the string.
+    /// Converts the string to title case using the specified culture.
     /// </summary>
-    /// <param name="str">The input string.</param>
-    /// <returns>The reversed string.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when the input string is null.</exception>
-    public static string Reverse(this string str)
-    {
-        ArgumentNullException.ThrowIfNull(str);
-
-        if (str.Length == 0) return str;
-        char[] charArray = str.ToCharArray();
-        Array.Reverse(charArray);
-        return new string(charArray);
-    }
-
-    /// <summary>
-    /// Converts the first letter of each word to uppercase using the specified culture.
-    /// </summary>
-    /// <param name="str">The input string.</param>
-    /// <param name="culture">The culture to use for case conversion. If null, the current culture is used.</param>
-    /// <returns>The string with the first letter of each word converted to uppercase.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when the input string is null.</exception>
+    /// <param name="str">The string to convert.</param>
+    /// <param name="culture">
+    /// The culture to use, or <see langword="null"/> to use the current culture.
+    /// </param>
+    /// <returns>
+    /// The string converted to lowercase and then to title case.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">
+    /// <paramref name="str"/> is <see langword="null"/>.
+    /// </exception>
     public static string ToTitleCase(this string str, CultureInfo? culture = null)
     {
         ArgumentNullException.ThrowIfNull(str);

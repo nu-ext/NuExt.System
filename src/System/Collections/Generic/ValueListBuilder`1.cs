@@ -22,7 +22,8 @@ public ref partial struct ValueListBuilder<T>
 
     public ValueListBuilder(int capacity)
     {
-        Grow(capacity);
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
+        if (capacity > 0) Grow(capacity);
     }
 
     public int Length
@@ -32,6 +33,10 @@ public ref partial struct ValueListBuilder<T>
         {
             Debug.Assert(value >= 0);
             Debug.Assert(value <= _span.Length);
+            if ((uint)value > (uint)_span.Length)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
             _pos = value;
         }
     }
@@ -41,6 +46,10 @@ public ref partial struct ValueListBuilder<T>
         get
         {
             Debug.Assert(index < _pos);
+            if ((uint)index >= (uint)_pos)
+            {
+                throw new ArgumentOutOfRangeException(nameof(index));
+            }
             return ref _span[index];
         }
     }
@@ -85,7 +94,7 @@ public ref partial struct ValueListBuilder<T>
     {
         if ((uint)(_pos + source.Length) > (uint)_span.Length)
         {
-            Grow(_span.Length - _pos + source.Length);
+            Grow(source.Length);
         }
 
         source.CopyTo(_span.Slice(_pos));
@@ -94,15 +103,30 @@ public ref partial struct ValueListBuilder<T>
 
     public void Insert(int index, scoped ReadOnlySpan<T> source)
     {
-        Debug.Assert(index == 0, "Implementation currently only supports index == 0");
+        Debug.Assert((uint)index <= (uint)_pos, "Index should be in range [0, _pos]");
+
+        if ((uint)index > (uint)_pos)
+        {
+            throw new ArgumentOutOfRangeException(nameof(index));
+        }
+
+        if (source.IsEmpty)
+        {
+            return;
+        }
+
+        if (source.Overlaps(_span))
+        {
+            source = source.ToArray();
+        }
 
         if ((uint)(_pos + source.Length) > (uint)_span.Length)
         {
             Grow(source.Length);
         }
 
-        _span.Slice(0, _pos).CopyTo(_span.Slice(source.Length));
-        source.CopyTo(_span);
+        _span.Slice(index, _pos - index).CopyTo(_span.Slice(index + source.Length));
+        source.CopyTo(_span.Slice(index));
         _pos += source.Length;
     }
 
@@ -113,7 +137,7 @@ public ref partial struct ValueListBuilder<T>
 
         int pos = _pos;
         Span<T> span = _span;
-        if ((ulong)(uint)pos + (ulong)(uint)length <= (ulong)(uint)span.Length) // same guard condition as in Span<T>.Slice on 64-bit
+        if ((uint)(pos + length) <= (uint)span.Length)
         {
             _pos = pos + length;
             return span.Slice(pos, length);
@@ -128,7 +152,7 @@ public ref partial struct ValueListBuilder<T>
     private Span<T> AppendSpanWithGrow(int length)
     {
         int pos = _pos;
-        Grow(_span.Length - pos + length);
+        Grow(length);
         _pos += length;
         return _span.Slice(pos, length);
     }
@@ -165,31 +189,45 @@ public ref partial struct ValueListBuilder<T>
     public void Dispose()
     {
         T[]? toReturn = _arrayFromPool;
+        int length = _span.Length;
+        this = default;
+
         if (toReturn != null)
         {
-            _arrayFromPool = null;
-
-            if (!typeof(T).IsPrimitive)
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
-                Array.Clear(toReturn, 0, _pos);
+                Array.Clear(toReturn, 0, length);
             }
 
             ArrayPool<T>.Shared.Return(toReturn);
         }
     }
 
-    // Note that consuming implementations depend on the list only growing if it's absolutely
-    // required.  If the list is already large enough to hold the additional items be added,
-    // it must not grow. The list is used in a number of places where the reference is checked
-    // and it's expected to match the initial reference provided to the constructor if that
-    // span was sufficiently large.
-    private void Grow(int additionalCapacityRequired = 1)
+    /// <summary>
+    /// Resize the internal buffer either by doubling current buffer size or
+    /// by adding <paramref name="additionalCapacityBeyondPos"/> to
+    /// <see cref="_pos"/> whichever is greater.
+    /// </summary>
+    /// <param name="additionalCapacityBeyondPos">
+    /// Number of chars requested beyond current position.
+    /// </param>
+    /// <remarks>
+    /// Note that consuming implementations depend on the list only growing if it's absolutely
+    /// required.  If the list is already large enough to hold the additional items be added,
+    /// it must not grow. The list is used in a number of places where the reference is checked
+    /// and it's expected to match the initial reference provided to the constructor if that
+    /// span was sufficiently large.
+    /// </remarks>
+    private void Grow(int additionalCapacityBeyondPos)
     {
+        Debug.Assert(additionalCapacityBeyondPos > 0);
+        Debug.Assert(_pos > _span.Length - additionalCapacityBeyondPos, "Grow called incorrectly, no resize is needed.");
+
         const int ArrayMaxLength = 0x7FFFFFC7; // same as Array.MaxLength
 
         // Double the size of the span.  If it's currently empty, default to size 4,
         // although it'll be increased in Rent to the pool's minimum bucket size.
-        int nextCapacity = Math.Max(_span.Length != 0 ? _span.Length * 2 : 4, _span.Length + additionalCapacityRequired);
+        int nextCapacity = Math.Max(_span.Length != 0 ? _span.Length * 2 : 4, _pos + additionalCapacityBeyondPos);
 
         // If the computed doubled capacity exceeds the possible length of an array, then we
         // want to downgrade to either the maximum array length if that's large enough to hold
@@ -206,17 +244,19 @@ public ref partial struct ValueListBuilder<T>
         _span.CopyTo(array);
 
         T[]? toReturn = _arrayFromPool;
+        int oldLength = _span.Length;
         _span = _arrayFromPool = array;
         if (toReturn != null)
         {
-            if (!typeof(T).IsPrimitive)
+            if (RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
-                Array.Clear(toReturn, 0, _pos);
+                Array.Clear(toReturn, 0, oldLength);
             }
 
             ArrayPool<T>.Shared.Return(toReturn);
         }
     }
+
     public T[] ToArray()
     {
         T[] array = _pos == 0 ? [] : _span.Slice(0, _pos).ToArray();

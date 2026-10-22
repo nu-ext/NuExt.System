@@ -1,5 +1,8 @@
 ﻿namespace System;
 
+/// <summary>
+/// Provides compatibility extension methods for working with characters.
+/// </summary>
 public static class CharExtensions
 {
 #if !NET

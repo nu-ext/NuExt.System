@@ -1,6 +1,6 @@
 ﻿namespace System.Diagnostics;
 
-#if !NET
+#if !NET6_0_OR_GREATER
 /// <summary>
 /// Types and Methods attributed with StackTraceHidden will be omitted from the stack trace text shown in StackTrace.ToString()
 /// and Exception.StackTrace

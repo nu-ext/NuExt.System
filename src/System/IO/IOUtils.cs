@@ -26,7 +26,7 @@ public static partial class IOUtils
     /// <summary>
     /// Returns <see langword="true"/> if the platform uses case-sensitive file system.
     /// </summary>
-    public static bool IsCaseSensitiveFileSystem => !(PlatformInformation.IsWindows || PlatformInformation.IsMacOS);
+    public static bool IsCaseSensitivePlatform => !(PlatformInformation.IsWindows || PlatformInformation.IsMacOS);
 
     /// <summary>
     /// Ensures that a path has the specified extension. If the path does not end with the specified extension,
@@ -41,7 +41,7 @@ public static partial class IOUtils
         Throw.ArgumentExceptionIf(string.IsNullOrWhiteSpace(defaultExtension) || !defaultExtension.StartsWith('.'),
             "Extension must start with a dot and cannot be empty", nameof(defaultExtension));
 
-        var comparison = IsCaseSensitiveFileSystem ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        var comparison = IsCaseSensitivePlatform ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
         // Check if the path already ends with the default extension
         if (!path.EndsWith(defaultExtension, comparison))
         {
@@ -116,10 +116,8 @@ public static partial class IOUtils
     /// </remarks>
     public static string GetNormalizedPath(string path)
     {
-        if (string.IsNullOrEmpty(path))
-        {
-            return path;
-        }
+        ArgumentException.ThrowIfNullOrEmpty(path);
+
         string normalized = Path.GetFullPath(path);
         if (PlatformInformation.IsWindows)
         {
@@ -166,7 +164,7 @@ public static partial class IOUtils
             return true;
         }
 
-        if (!IsCaseSensitiveFileSystem)
+        if (!IsCaseSensitivePlatform)
         {
             return char.ToUpperInvariant(x) == char.ToUpperInvariant(y);
         }
@@ -190,15 +188,13 @@ public static partial class IOUtils
             return s;
         }
 
-        if (IsRootPath(s))
-        {
-            return s;
-        }
+        string? root = Path.GetPathRoot(s);
+        int rootLength = root?.Length ?? 0;
 
         int lastSeparator = s.Length;
-        while (lastSeparator > 0 && IsDirectorySeparator(s[lastSeparator - 1]))
+        while (lastSeparator > rootLength && IsDirectorySeparator(s[lastSeparator - 1]))
         {
-            lastSeparator --;
+            lastSeparator--;
         }
 
         if (lastSeparator != s.Length)
@@ -211,56 +207,6 @@ public static partial class IOUtils
         }
 
         return s;
-    }
-
-    private static bool IsRootPath(string path)
-    {
-        if (!PlatformInformation.IsWindows && path == "/")
-        {
-            return true;
-        }
-
-        if (PlatformInformation.IsWindows && path.Length >= 2 && path[1] == ':')
-        {
-            // "C:" or "C:\" or "C:/"
-            if (path.Length == 2)
-                return true;
-
-            if (path.Length == 3 && IsDirectorySeparator(path[2]))
-                return true;
-        }
-
-        // Windows UNC path: \\server\share
-        if (PlatformInformation.IsWindows && path.StartsWith(@"\\", StringComparison.Ordinal))
-        {
-            // Count path segments after the initial "\\"
-            int segmentCount = 0;
-            int i = 2; // Skip initial "\\"
-
-            while (i < path.Length)
-            {
-                // Skip consecutive separators
-                while (i < path.Length && IsDirectorySeparator(path[i]))
-                    i++;
-
-                // If we have a non-separator character, it's a segment
-                int segmentStart = i;
-                while (i < path.Length && !IsDirectorySeparator(path[i]))
-                    i++;
-
-                if (i > segmentStart)
-                    segmentCount++;
-
-                // If we already have more than 2 segments, it's not a root
-                if (segmentCount > 2)
-                    return false;
-            }
-
-            // Root UNC has exactly 2 segments: server and share
-            return segmentCount == 2;
-        }
-
-        return false;
     }
 
     /// <summary>

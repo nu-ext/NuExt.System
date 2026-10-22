@@ -37,28 +37,6 @@ public sealed class ProcessMonitor
     public int ProcessorCount => _processorCount ??= Environment.ProcessorCount;
 
     /// <summary>
-    /// Gets the number of allocated worker threads in the ThreadPool.
-    /// </summary>
-    /// <returns>The number of allocated worker threads.</returns>
-    public int GetAllocatedWorkerThreads()
-    {
-        _ = this;
-        try
-        {
-
-            ThreadPool.GetAvailableThreads(out int workerThreads, out _);
-            ThreadPool.GetMaxThreads(out int maxWorkerThreads, out _);
-            int busyWorkerThreads = maxWorkerThreads - workerThreads;
-            return busyWorkerThreads;
-        }
-        catch (Exception ex)
-        {
-            Trace.WriteLine($"Error retrieving busy worker threads: {ex.Message}");
-            return 0;
-        }
-    }
-
-    /// <summary>
     /// Calculates the current CPU usage percentage for the process.
     /// </summary>
     /// <returns>The percentage of CPU usage for the process, accounting for the number of cores.</returns>
@@ -71,11 +49,16 @@ public sealed class ProcessMonitor
             TimeSpan cpuUsed = currentTotalProcessorTime - _lastTotalProcessorTime;
             TimeSpan totalPassed = currentElapsed - _lastElapsed;
 
-            double cpuUsageTotal = (cpuUsed.Ticks / (double)totalPassed.Ticks) * 100;
-            double cpuUsagePerCore = cpuUsageTotal / ProcessorCount;
-
             _lastTotalProcessorTime = currentTotalProcessorTime;
             _lastElapsed = currentElapsed;
+
+            if (totalPassed.Ticks <= 0)
+            {
+                return 0f;
+            }
+
+            double cpuUsageTotal = (cpuUsed.Ticks / (double)totalPassed.Ticks) * 100;
+            double cpuUsagePerCore = cpuUsageTotal / ProcessorCount;
 
             return (float)cpuUsagePerCore;
         }

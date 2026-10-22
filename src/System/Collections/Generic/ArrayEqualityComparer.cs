@@ -1,5 +1,4 @@
-﻿using System.Diagnostics;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
 namespace System.Collections.Generic;
 
@@ -67,7 +66,6 @@ public readonly struct ArrayEqualityComparer<T> : IEqualityComparer<T[]>
     public int GetHashCode(T[]? arr)
     {
         if (arr is null) return 0;
-        Debug.Assert(arr is { Length: > 0 });
         var hash = new HashCode();
         for (uint i = 0; i < arr.Length; ++i)
         {

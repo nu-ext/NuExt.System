@@ -245,7 +245,7 @@ public class ObservableDictionaryTests
         using (Assert.EnterMultipleScope())
         {
             Assert.That(ilist.IsReadOnly, Is.True);
-            Assert.That(ilist.IsFixedSize, Is.False);
+            Assert.That(ilist.IsFixedSize, Is.True);
         }
 
         Assert.Throws<NotSupportedException>(() => ilist.Add(new KeyValuePair<int, string>(2, "b")));
