@@ -867,7 +867,7 @@ partial class CompatMemoryExtensions
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static unsafe int LastIndexOf<T>(this ReadOnlySpan<T> span, ReadOnlySpan<T> value, IEqualityComparer<T>? comparer = null)
     {
-        if (RuntimeHelpers.IsKnownBitwiseEquatable<T>())
+        if (RuntimeHelpers.IsKnownBitwiseEquatable<T>() && (comparer is null || comparer == EqualityComparer<T>.Default))
         {
             int size = Unsafe.SizeOf<T>();
             if (size == sizeof(byte))
