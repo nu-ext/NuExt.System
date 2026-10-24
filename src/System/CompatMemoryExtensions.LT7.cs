@@ -506,7 +506,7 @@ partial class CompatMemoryExtensions
     /// <param name="span">The span to search.</param>
     /// <param name="values">The values to avoid.</param>
     /// <returns>
-    /// The index in the span of the first occurrence of any value other than those in <paramref name="values"/>.
+    /// The index in the span of the last occurrence of any value other than those in <paramref name="values"/>.
     /// If all of the values are in <paramref name="values"/>, returns -1.
     /// </returns>
     public static unsafe int LastIndexOfAnyExcept<T>(this ReadOnlySpan<T> span, ReadOnlySpan<T> values) where T : IEquatable<T>?

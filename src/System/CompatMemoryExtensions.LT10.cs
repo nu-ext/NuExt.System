@@ -617,7 +617,7 @@ partial class CompatMemoryExtensions
     /// <param name="values">The values to avoid.</param>
     /// <param name="comparer">The <see cref="IEqualityComparer{T}"/> implementation to use when comparing elements, or <see langword="null"/> to use the default <see cref="IEqualityComparer{T}"/> for the type of an element.</param>
     /// <returns>
-    /// The index in the span of the first occurrence of any value other than those in <paramref name="values"/>.
+    /// The index in the span of the last occurrence of any value other than those in <paramref name="values"/>.
     /// If all of the values are in <paramref name="values"/>, returns -1.
     /// </returns>
     public static int LastIndexOfAnyExcept<T>(this ReadOnlySpan<T> span, ReadOnlySpan<T> values, IEqualityComparer<T>? comparer = null)
