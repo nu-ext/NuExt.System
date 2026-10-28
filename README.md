@@ -17,7 +17,7 @@
 - **Lifetime-driven** — deterministic cleanup for disposables, asynchronous resources, subscriptions, and services
 - **High-performance** — span-based APIs, pooled buffers, and allocation-conscious builders
 - **Consistent across runtimes** — a stable API surface across modern .NET, .NET Standard, and .NET Framework
-- **Dependency-light** — no required hosting model, container, UI framework, or heavy external infrastructure
+- **Dependency-light** — no required hosting model, container, UI framework, or heavy external infrastructure; modern .NET targets have no package dependencies
 
 ## Designed for
 
@@ -83,7 +83,7 @@ Sequential invocation is the default because event handlers commonly interact wi
 - `ObservableDictionary<TKey, TValue>` is a full observable dictionary rather than a thin wrapper around `Dictionary<TKey, TValue>`. It implements dictionary and list-oriented contracts, preserves stable insertion order, provides index-aware collection notifications for individual changes, uses reset notifications for batch operations, and keeps `Count` and indexer property notifications consistent with each mutation.
 - The dictionary can participate directly in data-binding pipelines built around `INotifyCollectionChanged` and `INotifyPropertyChanged`, including WPF, Avalonia, WinUI, .NET MAUI, and other UI or application frameworks that consume these standard interfaces.
 - `OrderedObservableCollection<T>` maintains application-defined item ordering across inserts and moves while allowing explicit normalization when complete renumbering is required.
-- `ArrayEqualityComparer<T>` provides structural array equality, while `ReferenceEqualityComparer` backports BCL reference-identity comparison to older target frameworks.
+- `ArrayEqualityComparer<T>` provides structural array equality using the default or a custom element comparer, with optimized comparison paths where supported; `ReferenceEqualityComparer` backports BCL reference-identity comparison to older target frameworks.
 
 ### Performance-oriented primitives
 
@@ -122,6 +122,7 @@ NuExt.System also includes focused helpers for delegates and asynchronous multic
 ## Compatibility
 
 - **.NET Standard 2.0+, .NET 8/9/10, and .NET Framework 4.6.2+**
+- Modern .NET targets have no package dependencies; older targets use only focused BCL compatibility packages
 - Designed primarily for **desktop and hybrid application infrastructure**
 - Usable with **WPF, WinForms, Avalonia, WinUI, Blazor Hybrid, console applications, services, and shared libraries**
 - Platform-independent APIs support Windows and Unix path semantics on any host OS
@@ -215,13 +216,14 @@ Or via Visual Studio:
 
 ## Ecosystem
 
+- [NuExt.System.Data](https://github.com/nu-ext/NuExt.System.Data)
+- [NuExt.System.Data.SQLite](https://github.com/nu-ext/NuExt.System.Data.SQLite)
 - [NuExt.Minimal.Mvvm](https://github.com/nu-ext/NuExt.Minimal.Mvvm)
 - [NuExt.Minimal.Mvvm.SourceGenerator](https://github.com/nu-ext/NuExt.Minimal.Mvvm.SourceGenerator)
 - [NuExt.Minimal.Behaviors.Wpf](https://github.com/nu-ext/NuExt.Minimal.Behaviors.Wpf)
+- [NuExt.Presentation.Wpf](https://github.com/nu-ext/NuExt.Presentation.Wpf)
 - [NuExt.Minimal.Mvvm.Wpf](https://github.com/nu-ext/NuExt.Minimal.Mvvm.Wpf)
 - [NuExt.Minimal.Mvvm.MahApps.Metro](https://github.com/nu-ext/NuExt.Minimal.Mvvm.MahApps.Metro)
-- [NuExt.System.Data](https://github.com/nu-ext/NuExt.System.Data)
-- [NuExt.System.Data.SQLite](https://github.com/nu-ext/NuExt.System.Data.SQLite)
 
 ## Notes & acknowledgements
 

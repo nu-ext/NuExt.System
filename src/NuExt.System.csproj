@@ -12,12 +12,18 @@
     <VersionPrefix>0.8.1</VersionPrefix>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'net462' or '$(TargetFramework)' == 'net471'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'net471' or '$(TargetFramework)' == 'net462'">
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.14" />
     <PackageReference Include="Microsoft.Bcl.HashCode" Version="6.0.0" />
+    <PackageReference Include="System.Memory" Version="4.6.3" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1' or '$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'net462' or '$(TargetFramework)' == 'net471'">
-    <PackageReference Include="System.Text.Json" Version="10.0.14" />
+  <ItemGroup Condition="'$(TargetFramework)' == 'net462'">
+    <PackageReference Include="System.ValueTuple" Version="4.6.2" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
   </ItemGroup>
 
 </Project>
