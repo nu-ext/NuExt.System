@@ -121,7 +121,7 @@ NuExt.System also includes focused helpers for delegates and asynchronous multic
 
 ## Compatibility
 
-- **.NET Standard 2.0+, .NET 8/9/10, and .NET Framework 4.6.2+**
+- **.NET Standard 2.0+, .NET 8/9/10/11, and .NET Framework 4.6.2+**
 - Modern .NET targets have no package dependencies; older targets use only focused BCL compatibility packages
 - Designed primarily for **desktop and hybrid application infrastructure**
 - Usable with **WPF, WinForms, Avalonia, WinUI, Blazor Hybrid, console applications, services, and shared libraries**

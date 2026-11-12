@@ -75,8 +75,17 @@ internal static class TypeInfoCache<T>
         {
             return false;
         }
+#if NET11_0_OR_GREATER
+        if (type == typeof(Guid) || type == typeof(Int128) || type == typeof(UInt128))
+        {
+            return true;
+        }
+#endif
 
-        if (type == typeof(decimal) || type == typeof(Guid) ||
+        if (type == typeof(decimal) ||
+#if !NET11_0_OR_GREATER
+            type == typeof(Guid) ||
+#endif
             type == typeof(double) || type == typeof(float) ||
             type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(TimeSpan))
         {

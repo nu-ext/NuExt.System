@@ -144,6 +144,8 @@ public class CompatRuntimeHelpersIsBitwiseEquatableTests
     [TestCase(typeof(SampleClass), ExpectedResult = true)]
     [TestCase(typeof(int[]), ExpectedResult = true)]
     [TestCase(typeof(Guid), ExpectedResult = true)]
+    [TestCase(typeof(Int128), ExpectedResult = true)]
+    [TestCase(typeof(UInt128), ExpectedResult = true)]
     [TestCase(typeof(DateTime), ExpectedResult = true)]
     [TestCase(typeof(DateTimeOffset), ExpectedResult = true)]
     [TestCase(typeof(TimeSpan), ExpectedResult = true)]
@@ -196,7 +198,15 @@ public class CompatRuntimeHelpersIsBitwiseEquatableTests
     [TestCase(typeof(object), ExpectedResult = false)]
     [TestCase(typeof(SampleClass), ExpectedResult = false)]
     [TestCase(typeof(int[]), ExpectedResult = false)]
+#if NET11_0_OR_GREATER
+    [TestCase(typeof(Guid), ExpectedResult = true)]
+    [TestCase(typeof(Int128), ExpectedResult = true)]
+    [TestCase(typeof(UInt128), ExpectedResult = true)]
+#else
     [TestCase(typeof(Guid), ExpectedResult = false)]
+    [TestCase(typeof(Int128), ExpectedResult = false)]
+    [TestCase(typeof(UInt128), ExpectedResult = false)]
+#endif
     [TestCase(typeof(DateTime), ExpectedResult = false)]
     [TestCase(typeof(DateTimeOffset), ExpectedResult = false)]
     [TestCase(typeof(TimeSpan), ExpectedResult = false)]
@@ -245,7 +255,17 @@ public class CompatRuntimeHelpersIsBitwiseEquatableTests
     [TestCase(typeof(object), ExpectedResult = false)]
     [TestCase(typeof(SampleClass), ExpectedResult = false)]
     [TestCase(typeof(int[]), ExpectedResult = false)]
+#if NET11_0_OR_GREATER
+    [TestCase(typeof(Guid), ExpectedResult = true)]
+    [TestCase(typeof(Int128), ExpectedResult = true)]
+    [TestCase(typeof(UInt128), ExpectedResult = true)]
+#elif NET
     [TestCase(typeof(Guid), ExpectedResult = false)]
+    [TestCase(typeof(Int128), ExpectedResult = false)]
+    [TestCase(typeof(UInt128), ExpectedResult = false)]
+#else
+    [TestCase(typeof(Guid), ExpectedResult = false)]
+#endif
     [TestCase(typeof(DateTime), ExpectedResult = false)]
     [TestCase(typeof(DateTimeOffset), ExpectedResult = false)]
     [TestCase(typeof(TimeSpan), ExpectedResult = false)]
