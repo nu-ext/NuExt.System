@@ -1,9 +1,9 @@
 namespace System.ComponentModel;
 
 /// <summary>
-/// Provides strict accessors for <see cref="IReflectableProperties"/> that throw when a property is unknown or cannot be set.
+/// Provides strict accessors for <see cref="IPropertyBag"/> that throw when a property is unknown or cannot be set.
 /// </summary>
-public static class ReflectablePropertiesExtensions
+public static class PropertyBagExtensions
 {
     /// <summary>
     /// Gets the type of the named property.
@@ -13,7 +13,7 @@ public static class ReflectablePropertiesExtensions
     /// <returns>The type of the property.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">The property is unknown.</exception>
-    public static Type GetPropertyType(this IReflectableProperties source, string propertyName)
+    public static Type GetPropertyType(this IPropertyBag source, string propertyName)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -33,7 +33,7 @@ public static class ReflectablePropertiesExtensions
     /// <returns>The value of the property, which may be <see langword="null"/>.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="source"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">The property is unknown.</exception>
-    public static object? GetProperty(this IReflectableProperties source, string propertyName)
+    public static object? GetProperty(this IPropertyBag source, string propertyName)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -53,7 +53,7 @@ public static class ReflectablePropertiesExtensions
     /// <param name="value">The value to assign.</param>
     /// <exception cref="ArgumentNullException"><paramref name="target"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">The property is unknown or its value cannot be assigned.</exception>
-    public static void SetProperty(this IReflectableProperties target, string propertyName, object? value)
+    public static void SetProperty(this IPropertyBag target, string propertyName, object? value)
     {
         ArgumentNullException.ThrowIfNull(target);
 

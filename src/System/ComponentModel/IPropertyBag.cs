@@ -5,7 +5,7 @@ namespace System.ComponentModel;
 /// <summary>
 /// Defines a contract for objects whose properties can be accessed by name.
 /// </summary>
-public interface IReflectableProperties
+public interface IPropertyBag
 {
     /// <summary>
     /// Attempts to get the type of the named property.
