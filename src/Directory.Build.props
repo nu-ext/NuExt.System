@@ -1,4 +1,7 @@
 <Project>
+  <!-- Imports -->
+  <Import Project="$(MSBuildThisFileDirectory)\..\Directory.Build.props" />
+
   <!-- Package metadata -->
   <PropertyGroup>
     <Authors>ivanvoyager</Authors>
@@ -45,8 +48,5 @@
   <ItemGroup>
     <InternalsVisibleTo Include="$(MSBuildProjectName).Tests" Key="0024000004800000940000000602000000240000525341310004000001000100b789a2ca53134810a04b9629da17625466eca3b89758bedfe43ebb1ed321c10eb969c265dbfe73e8fa34a63a30246654a4db84f23112d88b7f2a61573784f338af6d225b994a3ff0aa17db7faadb09edda35a28a5569a7e389fa501a23215d30987200702b22b86b36becc3780770256448a230c38bbdc0ba30fb21faeae5fbc" />
   </ItemGroup>
-
-  <!-- Imports -->
-  <Import Project="$(MSBuildThisFileDirectory)\..\Directory.Build.props" />
 
 </Project>

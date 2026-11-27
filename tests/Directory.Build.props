@@ -1,12 +1,12 @@
 <Project>
+  <!-- Imports -->
+  <Import Project="$(MSBuildThisFileDirectory)\..\Directory.Build.props" />
+
   <!-- Sign assembly -->
   <PropertyGroup>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)\..\MyPublicKey.snk</AssemblyOriginatorKeyFile>
     <PublicSign>true</PublicSign>
   </PropertyGroup>
-
-  <!-- Imports -->
-  <Import Project="$(MSBuildThisFileDirectory)\..\Directory.Build.props" />
 
 </Project>
