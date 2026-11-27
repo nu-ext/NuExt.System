@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security;
@@ -219,5 +220,94 @@ public static partial class IOUtils
 
         var builder = new PathBuilder(directory);
         return builder.GetRelativePath(fullPath, Environment.CurrentDirectory).ToString();
+    }
+
+    /// <summary>
+    /// Shortens a path for display, using the directory separator of the current platform.
+    /// </summary>
+    /// <param name="path">The path to shorten.</param>
+    /// <param name="preferredLength">The preferred length of the result. Zero or a negative value returns the path unmodified.</param>
+    /// <returns>
+    /// The path itself when it fits; otherwise the root, an ellipsis and as many trailing segments as fit.
+    /// The last segment (the file or directory name) is never shortened.
+    /// </returns>
+    public static string ShortenPathForDisplay(string path, int preferredLength)
+    {
+        return ShortenPathForDisplay(path, preferredLength, Path.DirectorySeparatorChar);
+    }
+
+    /// <summary>
+    /// Shortens a path for display: the root and the last segment are kept, the middle is replaced with an ellipsis.
+    /// </summary>
+    /// <param name="path">The path to shorten.</param>
+    /// <param name="preferredLength">
+    /// The preferred length of the result. Zero or a negative value returns the path unmodified.
+    /// </param>
+    /// <param name="directorySeparatorChar">
+    /// The separator the path is written with: <c>'\'</c> for Windows, <c>'/'</c> for Unix.
+    /// </param>
+    /// <returns>
+    /// The path itself when it fits; otherwise the root, an ellipsis and as many trailing segments as fit.
+    /// The last segment (the file or directory name) is never shortened, so the result exceeds
+    /// <paramref name="preferredLength"/> when the name alone does not fit.
+    /// </returns>
+    /// <remarks>
+    /// <para>Segments are kept whole: a directory name is either shown or replaced with the ellipsis, never cut.</para>
+    /// <para>A null or empty path is returned as is: the method never throws on a path.</para>
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="directorySeparatorChar"/> is neither <c>'\'</c> nor <c>'/'</c>.
+    /// </exception>
+    public static string ShortenPathForDisplay(string path, int preferredLength, char directorySeparatorChar)
+    {
+        if (directorySeparatorChar != '\\' && directorySeparatorChar != '/')
+        {
+            throw new ArgumentOutOfRangeException(nameof(directorySeparatorChar), directorySeparatorChar, "The directory separator must be '\\' or '/'.");
+        }
+
+        if (string.IsNullOrEmpty(path) || preferredLength <= 0 || path.Length <= preferredLength)
+        {
+            return path;
+        }
+
+        const string ellipsis = "...";
+
+        var builder = new ValuePathBuilder(path)
+        {
+            DirectorySeparatorChar = directorySeparatorChar
+        };
+        string root = builder.GetPathRoot().ToString();
+        List<string> segments = builder.GetPathSegments();
+        builder.Dispose();
+
+        // Roots differ: "C:\" and "/" end with a separator, a UNC root ("\\server\share") does not.
+        // Normalize, so the ellipsis always follows the separator.
+        if (root.Length > 0)
+        {
+            root = root.TrimEnd('\\', '/') + directorySeparatorChar;
+        }
+
+        if (segments.Count < 2)
+        {
+            return path;
+        }
+
+        // The last segment is the file or directory name: it is never shortened.
+        string name = segments[segments.Count - 1];
+        int budget = preferredLength - root.Length - ellipsis.Length - 1 - name.Length;
+
+        // Keep the deepest directories that fit; everything between the root and them becomes the ellipsis.
+        int firstDirectory = root.Length > 0 ? 1 : 0;
+        int firstKeptSegment = segments.Count - 1;
+        while (firstKeptSegment > firstDirectory && segments[firstKeptSegment - 1].Length + 1 <= budget)
+        {
+            firstKeptSegment--;
+            budget -= segments[firstKeptSegment].Length + 1;
+        }
+
+        string directories = firstKeptSegment < segments.Count - 1
+            ? string.Join(directorySeparatorChar.ToString(), segments.GetRange(firstKeptSegment, segments.Count - 1 - firstKeptSegment)) + directorySeparatorChar
+            : string.Empty;
+        return root + ellipsis + directorySeparatorChar + directories + name;
     }
 }
